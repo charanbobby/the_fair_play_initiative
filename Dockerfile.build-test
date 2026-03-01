@@ -1,0 +1,17 @@
+FROM node:20-slim
+
+WORKDIR /app
+
+# Copy package files first for better layer caching
+COPY package.json package-lock.json ./
+
+# Use npm install (not npm ci) — same as vercel.json installCommand
+# This lets npm resolve platform-specific packages (e.g. @next/swc-linux-x64-gnu)
+# natively on Linux, matching the Vercel build environment
+RUN npm install
+
+# Copy the rest of the project
+COPY . .
+
+# Run the Next.js production build
+RUN npm run build
