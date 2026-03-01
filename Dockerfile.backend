@@ -1,0 +1,59 @@
+# Dockerfile.backend
+# -------------------
+# Python FastAPI backend for the Fair Play Initiative chatbot.
+#
+# Uses uv for fast, deterministic dependency installation.
+# Leaves the existing Dockerfile (Next.js shell) untouched.
+#
+# Build:
+#   docker build -f Dockerfile.backend -t fair-play-backend .
+#
+# Run (mock mode — no LLM keys needed):
+#   docker run --rm -p 8000:8000 fair-play-backend
+#
+# Run (with real LLM):
+#   docker run --rm -p 8000:8000 \
+#     -e LLM_PROVIDER=openai \
+#     -e LLM_API_KEY=sk-... \
+#     fair-play-backend
+
+FROM python:3.11-slim
+
+# Set working directory
+WORKDIR /srv/app
+
+# ---------------------------------------------------------------------------
+# Install uv — the fast Python package manager
+# We install via pip here once; uv then owns all subsequent dep installs.
+# ---------------------------------------------------------------------------
+RUN pip install --no-cache-dir uv
+
+# ---------------------------------------------------------------------------
+# Install Python dependencies from the authoritative requirements.txt
+#
+# --system: install into the system Python interpreter (not a venv).
+#           Required inside Docker because there is no active venv.
+# --no-cache: keep image layers small.
+# ---------------------------------------------------------------------------
+COPY requirements.txt .
+RUN uv pip install --system --no-cache -r requirements.txt
+
+# ---------------------------------------------------------------------------
+# Copy application source
+# ---------------------------------------------------------------------------
+COPY app/ ./app/
+
+# ---------------------------------------------------------------------------
+# Runtime configuration
+# ---------------------------------------------------------------------------
+# Default to mock LLM; override at runtime with -e LLM_PROVIDER=openai, etc.
+ENV LLM_PROVIDER=mock
+ENV APP_HOST=0.0.0.0
+ENV APP_PORT=8000
+
+EXPOSE 8000
+
+# ---------------------------------------------------------------------------
+# Start the server with uv run (honours the uv-managed Python environment)
+# ---------------------------------------------------------------------------
+CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
