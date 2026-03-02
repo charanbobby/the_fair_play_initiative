@@ -1,155 +1,167 @@
 # Deployment Guide
 
-Two deployment targets:
-
-| Target | What deploys | URL |
-|--------|-------------|-----|
-| **Hugging Face Spaces** | FastAPI backend (Docker runtime) | `https://<username>-<space-name>.hf.space` |
-| **Docker (local/server)** | FastAPI backend (full LLM support) | `http://localhost:8000` |
-
-> The Next.js frontend is deployed separately via its own CI/CD pipeline (auto-deploys on git push).
+Quick reference for every deployment you'll run frequently while building this project.
 
 ---
 
-## Hugging Face Spaces Deployment (Recommended for Backend)
+## 1. Local Development (Fastest Iteration)
 
-### How it works
-
-- HF Spaces detects the SDK from the `README.md` YAML frontmatter (`sdk: docker`).
-- It builds the **root `Dockerfile`** automatically on every push.
-- The app is served on port **7860** (the HF Spaces default).
-- No bundle size limit — full `requirements.txt` is installed.
-- LangChain, LangGraph, and Arize tracing all work here with no bundle size constraints.
-
-### Prerequisites
-
-- [Hugging Face account](https://huggingface.co/join)
-- `git` with Git LFS installed (`git lfs install`)
-- HF Space created (see Step 1)
-
-### Step 1 — Create a Hugging Face Space
-
-1. Go to [huggingface.co/new-space](https://huggingface.co/new-space)
-2. Fill in:
-   - **Space name**: e.g. `fair-play-backend`
-   - **SDK**: `Docker`
-   - **Visibility**: Public or Private
-3. Click **Create Space**
-
-### Step 2 — Add your HF Space as a remote
+No Docker, hot-reload on every file save.
 
 ```bash
-# Replace <username> and <space-name> with yours
-git remote add hf https://huggingface.co/spaces/<username>/<space-name>
+uv run uvicorn app.main:app --reload --port 8000
 ```
 
-### Step 3 — Set environment variables in HF Spaces
-
-In your Space dashboard → **Settings → Repository secrets**:
-
-| Variable | Value | Notes |
-|----------|-------|-------|
-| `LLM_PROVIDER` | `mock` | Default; change to `openai` for real LLM |
-| `OPENAI_API_KEY` | `sk-...` | Optional |
-| `ANTHROPIC_API_KEY` | `sk-ant-...` | Optional |
-| `ARIZE_API_KEY` | your key | Optional — enables tracing |
-| `ARIZE_SPACE_ID` | your ID | Optional |
-
-> Never commit keys to git — always use Secrets in the dashboard.
-
-### Step 4 — Push to deploy
-
+Test it:
 ```bash
-git push hf main
+curl http://localhost:8000/health
+curl http://localhost:8000/docs       # Swagger UI
 ```
 
-HF Spaces will automatically build the root `Dockerfile` and start the server. Build logs are visible in the Space dashboard.
-
-### Step 5 — Verify
-
-```bash
-BASE=https://<username>-<space-name>.hf.space
-
-curl $BASE/health
-# → {"status":"ok"}
-
-curl -X POST $BASE/chat \
-  -H "Content-Type: application/json" \
-  -d '{"session_id":"s1","message":"hello","metadata":{}}'
-# → {"reply":"MOCK_REPLY: hello","trace_id":"..."}
-
-# Interactive API docs
-open $BASE/docs
-```
-
-### HF Spaces notes
-
-| Topic | Detail |
-|-------|--------|
-| Port | Must be `7860` (set in `Dockerfile` and `README.md` frontmatter) |
-| Cold starts | Free tier spaces sleep after inactivity — first request may be slow |
-| Persistent memory | Sessions reset on restart; use Redis for persistence |
-| Hardware | Free CPU-basic → upgrade to GPU in Space settings for heavy inference |
-| Logs | Available in Space dashboard → **Logs** tab |
+Requires: Python 3.11+, `uv` installed, `uv pip install --system -r requirements.txt` run once.
 
 ---
 
-## Docker Deployment (Local / Any VPS)
+## 2. Local Docker (Matches HF Spaces Exactly)
 
-Use Docker for local development or deploying to Railway, Render, or Fly.io.
+Use this to catch Docker-specific issues before pushing to HF.
 
 ```bash
-# Build (uses Dockerfile.backend — port 8000 for local dev)
-docker build -f Dockerfile.backend -t fair-play-backend .
+# Build (mirrors the HF Spaces Dockerfile — port 7860)
+docker build -t fair-play-backend .
 
-# Run mock mode
-docker run --rm -p 8000:8000 fair-play-backend
+# Run
+docker run --rm -p 7860:7860 fair-play-backend
 
-# Run with real LLM
-docker run --rm -p 8000:8000 \
+# With a real LLM
+docker run --rm -p 7860:7860 \
   -e LLM_PROVIDER=openai \
   -e LLM_API_KEY=sk-... \
   fair-play-backend
 
-# Run with .env file
-docker run --rm -p 8000:8000 --env-file .env fair-play-backend
+# With .env file
+docker run --rm -p 7860:7860 --env-file .env fair-play-backend
 ```
 
-### Deploy to Railway / Render / Fly.io
+Test it:
+```bash
+curl http://localhost:7860/health
+```
 
-| Platform | Steps |
+> **Tip**: Use `Dockerfile.backend` (port 8000) for a dev-friendly local build that doesn't require port 7860.
+> ```bash
+> docker build -f Dockerfile.backend -t fair-play-backend-dev .
+> docker run --rm -p 8000:8000 fair-play-backend-dev
+> ```
+
+---
+
+## 3. Hugging Face Spaces (Backend Production)
+
+**Space URL**: https://huggingface.co/spaces/charanbobby/fair-play-backend
+**Live API**: https://charanbobby-fair-play-backend.hf.space
+
+HF builds the root `Dockerfile` automatically on every push.
+
+```bash
+# Push to HF (deploy backend)
+git push hf master:main
+```
+
+Monitor the build in the **Logs** tab on the Space dashboard.
+
+#### First-time setup (already done)
+```bash
+git remote add hf https://huggingface.co/spaces/charanbobby/fair-play-backend
+```
+
+#### Set secrets (HF dashboard → Settings → Repository secrets)
+
+| Variable | Notes |
 |----------|-------|
-| **Railway** | Connect repo → select `Dockerfile.backend` → set env vars → deploy |
-| **Render** | New Web Service → Docker → point to `Dockerfile.backend` |
-| **Fly.io** | `fly launch --dockerfile Dockerfile.backend` |
+| `LLM_PROVIDER` | `mock` (default) or `openai` / `anthropic` |
+| `OPENAI_API_KEY` | Required if `LLM_PROVIDER=openai` |
+| `ANTHROPIC_API_KEY` | Required if `LLM_PROVIDER=anthropic` |
+| `ARIZE_API_KEY` | Optional — enables Phoenix tracing |
+| `ARIZE_SPACE_ID` | Optional |
+
+#### Verify live endpoints
+```bash
+BASE=https://charanbobby-fair-play-backend.hf.space
+
+curl $BASE/health
+curl -X POST $BASE/chat \
+  -H "Content-Type: application/json" \
+  -d '{"session_id":"s1","message":"hello","metadata":{}}'
+```
 
 ---
 
-## React Native — Base URL per Environment
+## 4. GitHub (Version Control)
 
-| Environment | Base URL |
-|-------------|----------|
-| Physical device | `http://<LAN_IP>:8000` |
-| Android emulator | `http://10.0.2.2:8000` |
-| iOS simulator | `http://localhost:8000` |
-| HF Spaces (prod) | `https://<username>-<space-name>.hf.space` |
+Push to GitHub to keep the repo in sync. This does **not** trigger an HF build.
 
----
+```bash
+git push origin master
+```
 
-## Files Involved in Deployment
-
-| File | Purpose |
-|------|---------|
-| `Dockerfile` | HF Spaces build (port 7860, non-root user) |
-| `Dockerfile.backend` | Local Docker dev build (port 8000) |
-| `requirements.txt` | Full Python deps (used by both Dockerfiles) |
-| `README.md` | Contains HF Spaces YAML frontmatter (`sdk: docker`) |
-| `.env` | Local secrets (never commit) |
+#### Push to both at once
+```bash
+git push origin master && git push hf master:main
+```
 
 ---
 
-## Helpful Links
+## 5. Running Tests
 
-- [HF Spaces Docker SDK docs](https://huggingface.co/docs/hub/spaces-sdks-docker)
-- [HF Spaces environment variables](https://huggingface.co/docs/hub/spaces-overview#managing-secrets)
-- [uv documentation](https://docs.astral.sh/uv/)
+Run before every push to catch regressions.
+
+```bash
+pytest tests/ -v
+```
+
+Expected passing tests:
+- `test_health_endpoint`
+- `test_chat_endpoint_mock`
+- `test_chat_session_memory`
+- `test_quotes_draft_stub`
+
+---
+
+## 6. Environment Variables Reference
+
+| Variable | Local default | HF Spaces |
+|----------|--------------|-----------|
+| `LLM_PROVIDER` | `mock` | Set in Secrets |
+| `LLM_API_KEY` | — | Set in Secrets |
+| `OPENAI_API_KEY` | from `.env` | Set in Secrets |
+| `ANTHROPIC_API_KEY` | from `.env` | Set in Secrets |
+| `ARIZE_API_KEY` | from `.env` | Set in Secrets |
+| `APP_PORT` | `8000` (local) | `7860` (HF) |
+
+> Never commit `.env` to git. It is already in `.gitignore`.
+
+---
+
+## 7. Typical Dev Workflow
+
+```
+1. Edit code locally
+2. pytest tests/ -v              ← catch issues fast
+3. docker build -t fair-play-backend . && docker run --rm -p 7860:7860 fair-play-backend
+                                 ← verify Docker works
+4. git add . && git commit -m "..."
+5. git push origin master        ← GitHub backup
+6. git push hf master:main       ← HF Spaces deploy (live in ~1 min)
+```
+
+---
+
+## 8. Future Deployment Targets (Planned)
+
+| Target | When to use |
+|--------|-------------|
+| **Railway** | When you need a persistent server with Redis session memory |
+| **Fly.io** | When you need multi-region or GPU inference |
+| **Render** | Simple Docker hosting with free tier |
+| **React Native app** | Point `BASE_URL` at the HF Space URL or LAN IP (see README) |
