@@ -22,9 +22,12 @@ class Settings:
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
     ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
 
+    # Database
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./fpi.db")
+
     # Server
     APP_HOST: str = os.getenv("APP_HOST", "0.0.0.0")
-    APP_PORT: int = int(os.getenv("APP_PORT", "8000"))
+    APP_PORT: int = int(os.getenv("APP_PORT", "7860"))
 
     # Observability (Arize Phoenix) — optional; no-op if absent
     ARIZE_API_KEY: str = os.getenv("ARIZE_API_KEY", "")

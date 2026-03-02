@@ -38,8 +38,9 @@ RUN uv pip install --system --no-cache -r requirements.txt
 # ---------------------------------------------------------------------------
 COPY app/ ./app/
 
-# Give the non-root user ownership
-RUN chown -R appuser:appuser /home/appuser/app
+# Give the non-root user ownership (including the data dir for SQLite)
+RUN mkdir -p /home/appuser/app/data && \
+    chown -R appuser:appuser /home/appuser/app
 
 USER appuser
 

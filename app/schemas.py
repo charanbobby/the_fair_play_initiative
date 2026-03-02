@@ -6,7 +6,8 @@ Pydantic v2 request/response models for all API endpoints.
 
 from __future__ import annotations
 
-from typing import Any
+from datetime import date, datetime
+from typing import Any, List, Optional
 from pydantic import BaseModel, Field
 import uuid
 
@@ -62,3 +63,257 @@ class ErrorResponse(BaseModel):
     error: str
     trace_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     detail: dict[str, Any] = Field(default_factory=dict)
+
+
+# ===========================================================================
+# FPI Data Models
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# Region
+# ---------------------------------------------------------------------------
+
+class RegionBase(BaseModel):
+    id: str
+    name: str
+    code: str
+    timezone: str
+    labor_laws: str = ""
+
+
+class RegionCreate(RegionBase):
+    pass
+
+
+class RegionUpdate(BaseModel):
+    name: Optional[str] = None
+    code: Optional[str] = None
+    timezone: Optional[str] = None
+    labor_laws: Optional[str] = None
+
+
+class RegionResponse(RegionBase):
+    model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
+# Organization
+# ---------------------------------------------------------------------------
+
+class OrganizationBase(BaseModel):
+    id: str
+    name: str
+    code: str
+    active: bool = True
+
+
+class OrganizationCreate(OrganizationBase):
+    region_ids: List[str] = Field(default_factory=list)
+
+
+class OrganizationUpdate(BaseModel):
+    name: Optional[str] = None
+    code: Optional[str] = None
+    active: Optional[bool] = None
+    region_ids: Optional[List[str]] = None
+
+
+class OrganizationResponse(OrganizationBase):
+    region_ids: List[str] = Field(default_factory=list)
+    model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
+# Rule  (declared before Policy so PolicyResponse can embed it)
+# ---------------------------------------------------------------------------
+
+class RuleBase(BaseModel):
+    name: str
+    condition: str
+    threshold: int = 0
+    points: float
+    description: str = ""
+    active: bool = True
+    policy_id: Optional[str] = None
+
+
+class RuleCreate(RuleBase):
+    pass
+
+
+class RuleUpdate(BaseModel):
+    name: Optional[str] = None
+    condition: Optional[str] = None
+    threshold: Optional[int] = None
+    points: Optional[float] = None
+    description: Optional[str] = None
+    active: Optional[bool] = None
+    policy_id: Optional[str] = None
+
+
+class RuleResponse(RuleBase):
+    id: int
+    model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
+# Policy
+# ---------------------------------------------------------------------------
+
+class PolicyBase(BaseModel):
+    id: str
+    name: str
+    organization_id: str
+    region_id: str
+    active: bool = True
+    effective_date: Optional[date] = None
+
+
+class PolicyCreate(PolicyBase):
+    pass
+
+
+class PolicyUpdate(BaseModel):
+    name: Optional[str] = None
+    organization_id: Optional[str] = None
+    region_id: Optional[str] = None
+    active: Optional[bool] = None
+    effective_date: Optional[date] = None
+
+
+class PolicyResponse(PolicyBase):
+    rules: List[RuleResponse] = Field(default_factory=list)
+    model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
+# PointHistory
+# ---------------------------------------------------------------------------
+
+class PointHistoryBase(BaseModel):
+    date: date
+    type: str
+    points: float
+    status: str = "Active"
+    reason: Optional[str] = None
+
+
+class PointHistoryCreate(PointHistoryBase):
+    employee_id: int
+
+
+class PointHistoryResponse(PointHistoryBase):
+    id: int
+    employee_id: int
+    model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
+# Employee
+# ---------------------------------------------------------------------------
+
+class EmployeeBase(BaseModel):
+    first_name: str
+    last_name: str
+    email: str
+    department: str = ""
+    position: str = ""
+    start_date: Optional[date] = None
+    organization_id: str
+    region_id: str
+    policy_id: Optional[str] = None
+
+
+class EmployeeCreate(EmployeeBase):
+    pass
+
+
+class EmployeeUpdate(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[str] = None
+    department: Optional[str] = None
+    position: Optional[str] = None
+    start_date: Optional[date] = None
+    organization_id: Optional[str] = None
+    region_id: Optional[str] = None
+    policy_id: Optional[str] = None
+
+
+class EmployeeResponse(EmployeeBase):
+    id: int
+    points: float = 0.0
+    trend: str = "stable"
+    next_reset: Optional[date] = None
+    model_config = {"from_attributes": True}
+
+
+class EmployeeDetailResponse(EmployeeResponse):
+    point_history: List[PointHistoryResponse] = Field(default_factory=list)
+    model_config = {"from_attributes": True}
+
+
+# Override endpoint
+class OverrideRequest(BaseModel):
+    type: str = Field(..., description="excuse | reduce | reset")
+    amount: Optional[float] = None
+    reason: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# AttendanceLog
+# ---------------------------------------------------------------------------
+
+class AttendanceLogBase(BaseModel):
+    employee_id: int
+    organization_id: str
+    region_id: str
+    policy_id: Optional[str] = None
+    date: date
+    scheduled_in: str = "09:00 AM"
+    scheduled_out: str = "05:00 PM"
+    actual_in: str = ""
+    actual_out: str = ""
+    violation: Optional[str] = None
+    points: float = 0.0
+    status: str = "Compliant"
+
+
+class AttendanceLogCreate(AttendanceLogBase):
+    pass
+
+
+class AttendanceLogResponse(AttendanceLogBase):
+    id: int
+    model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
+# Alert
+# ---------------------------------------------------------------------------
+
+class AlertBase(BaseModel):
+    organization_id: Optional[str] = None
+    type: str
+    message: str
+
+
+class AlertCreate(AlertBase):
+    pass
+
+
+class AlertResponse(AlertBase):
+    id: int
+    created_at: datetime
+    model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
+# Dashboard
+# ---------------------------------------------------------------------------
+
+class DashboardStats(BaseModel):
+    total_employees: int
+    active_violations: int
+    red_flags: int
+    total_organizations: int

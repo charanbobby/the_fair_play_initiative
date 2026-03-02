@@ -1,0 +1,2892 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>The Fair Play Initiative</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      * {
+        font-family: "Inter", sans-serif;
+      }
+      .gradient-bg {
+        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      }
+      .card-shadow {
+        box-shadow:
+          0 4px 6px -1px rgba(0, 0, 0, 0.1),
+          0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      }
+      html,
+      body {
+        overflow-x: hidden;
+      }
+      #trendsChart {
+        max-height: 100% !important;
+      }
+      .glass-effect {
+        background: rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(10px);
+      }
+      .animate-fade-in {
+        animation: fadeIn 0.5s ease-in;
+      }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .drag-active {
+        border-color: #6366f1 !important;
+        background: rgba(99, 102, 241, 0.1) !important;
+      }
+      .status-badge {
+        @apply px-2 py-1 rounded-full text-xs font-medium;
+      }
+      .trend-up {
+        color: #ef4444;
+      }
+      .trend-down {
+        color: #22c55e;
+      }
+      .trend-stable {
+        color: #6b7280;
+      }
+      .modal-overlay {
+        background: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(4px);
+      }
+      .table-row:hover {
+        background: rgba(99, 102, 241, 0.05);
+      }
+      .progress-bar {
+        transition: width 0.3s ease;
+      }
+      .notification {
+        animation: slideIn 0.3s ease;
+      }
+      @keyframes slideIn {
+        from {
+          transform: translateX(100%);
+          opacity: 0;
+        }
+        to {
+          transform: translateX(0);
+          opacity: 1;
+        }
+      }
+      .tab-active {
+        border-bottom: 2px solid #6366f1;
+        color: #6366f1;
+      }
+      .rule-card {
+        transition: all 0.2s ease;
+      }
+      .rule-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+      }
+    </style>
+  </head>
+  <body class="bg-slate-50 text-slate-800">
+    <!-- Navigation -->
+    <nav class="gradient-bg text-white sticky top-0 z-50">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between h-16 items-center">
+          <div class="flex items-center gap-3">
+            <div class="bg-indigo-500 p-2 rounded-lg">
+              <i data-lucide="scale" class="w-6 h-6"></i>
+            </div>
+            <div>
+              <h1 class="text-xl font-bold">The Fair Play Initiative</h1>
+              <p class="text-xs text-slate-400">
+                Balanced Attendance Management
+              </p>
+            </div>
+          </div>
+          <div class="flex items-center gap-4">
+            <button
+              onclick="showNotifications()"
+              class="relative p-2 hover:bg-slate-700 rounded-lg transition"
+            >
+              <i data-lucide="bell" class="w-5 h-5"></i>
+              <span
+                id="notif-badge"
+                class="absolute -top-1 -right-1 bg-red-500 text-xs w-5 h-5 rounded-full flex items-center justify-center hidden"
+                >3</span
+              >
+            </button>
+            <div
+              class="flex items-center gap-2 bg-slate-700 px-3 py-2 rounded-lg"
+            >
+              <i data-lucide="user" class="w-4 h-4"></i>
+              <span class="text-sm font-medium">Admin</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <!-- Organization/Region Filters -->
+      <div class="bg-white rounded-xl p-4 card-shadow mb-6">
+        <div class="flex flex-wrap items-center gap-4">
+          <div class="flex items-center gap-2">
+            <i data-lucide="building-2" class="w-5 h-5 text-slate-400"></i>
+            <select
+              id="org-filter"
+              onchange="filterByOrganization()"
+              class="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white min-w-[200px]"
+            >
+              <option value="">All Organizations</option>
+            </select>
+          </div>
+          <div class="flex items-center gap-2">
+            <i data-lucide="globe" class="w-5 h-5 text-slate-400"></i>
+            <select
+              id="region-filter"
+              onchange="filterByRegion()"
+              class="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white min-w-[150px]"
+              disabled
+            >
+              <option value="">All Regions</option>
+            </select>
+          </div>
+          <div
+            id="current-filter-display"
+            class="text-sm text-slate-500 ml-auto"
+          >
+            Showing all organizations and regions
+          </div>
+        </div>
+      </div>
+
+      <!-- Dashboard Stats -->
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div class="bg-white rounded-xl p-6 card-shadow">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm text-slate-500 mb-1">Total Employees</p>
+              <p class="text-3xl font-bold text-slate-800" id="total-employees">
+                0
+              </p>
+            </div>
+            <div class="bg-indigo-100 p-3 rounded-lg">
+              <i data-lucide="users" class="w-6 h-6 text-indigo-600"></i>
+            </div>
+          </div>
+        </div>
+        <div class="bg-white rounded-xl p-6 card-shadow">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm text-slate-500 mb-1">Active Violations</p>
+              <p
+                class="text-3xl font-bold text-amber-600"
+                id="active-violations"
+              >
+                0
+              </p>
+            </div>
+            <div class="bg-amber-100 p-3 rounded-lg">
+              <i
+                data-lucide="alert-triangle"
+                class="w-6 h-6 text-amber-600"
+              ></i>
+            </div>
+          </div>
+        </div>
+        <div class="bg-white rounded-xl p-6 card-shadow">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm text-slate-500 mb-1">Red Flags</p>
+              <p class="text-3xl font-bold text-red-600" id="red-flags">0</p>
+            </div>
+            <div class="bg-red-100 p-3 rounded-lg">
+              <i data-lucide="flag" class="w-6 h-6 text-red-600"></i>
+            </div>
+          </div>
+        </div>
+        <div class="bg-white rounded-xl p-6 card-shadow">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm text-slate-500 mb-1">Organizations</p>
+              <p class="text-3xl font-bold text-emerald-600" id="total-orgs">
+                0
+              </p>
+            </div>
+            <div class="bg-emerald-100 p-3 rounded-lg">
+              <i data-lucide="building" class="w-6 h-6 text-emerald-600"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="bg-white rounded-t-xl border-b border-slate-200">
+        <div class="flex gap-8 px-6">
+          <button
+            onclick="switchTab('dashboard')"
+            id="tab-dashboard"
+            class="tab-active py-4 px-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition"
+          >
+            Dashboard
+          </button>
+          <button
+            onclick="switchTab('policies')"
+            id="tab-policies"
+            class="py-4 px-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition"
+          >
+            Policy Management
+          </button>
+          <button
+            onclick="switchTab('attendance')"
+            id="tab-attendance"
+            class="py-4 px-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition"
+          >
+            Attendance Logs
+          </button>
+          <button
+            onclick="switchTab('employees')"
+            id="tab-employees"
+            class="py-4 px-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition"
+          >
+            Employees
+          </button>
+        </div>
+      </div>
+
+      <!-- Dashboard Tab -->
+      <div id="content-dashboard" class="tab-content">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <!-- Point Trends Chart -->
+          <div class="lg:col-span-2 bg-white rounded-b-xl p-6 card-shadow">
+            <div class="flex items-center justify-between mb-6">
+              <h3 class="text-lg font-semibold text-slate-800">
+                Point Trends (6 Months)
+              </h3>
+              <select
+                class="text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white"
+              >
+                <option>All Departments</option>
+                <option>Sales</option>
+                <option>Engineering</option>
+                <option>HR</option>
+              </select>
+            </div>
+            <div style="height: 280px; position: relative">
+              <canvas id="trendsChart"></canvas>
+            </div>
+          </div>
+
+          <!-- Recent Alerts -->
+          <div class="bg-white rounded-b-xl p-6 card-shadow">
+            <h3 class="text-lg font-semibold text-slate-800 mb-4">
+              Recent Alerts
+            </h3>
+            <div id="alerts-list" class="space-y-3">
+              <!-- Alerts populated by JS -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Top Violators -->
+        <div class="mt-6 bg-white rounded-xl p-6 card-shadow">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-slate-800">
+              Employees Approaching Threshold
+            </h3>
+            <button
+              onclick="switchTab('employees')"
+              class="text-indigo-600 text-sm font-medium hover:underline"
+            >
+              View All
+            </button>
+          </div>
+          <div
+            id="top-violators"
+            class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+          >
+            <!-- Populated by JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Policy Management Tab -->
+      <div id="content-policies" class="tab-content hidden">
+        <div class="bg-white rounded-b-xl p-6 card-shadow">
+          <div class="flex items-center justify-between mb-6 flex-wrap gap-4">
+            <div>
+              <h3 class="text-lg font-semibold text-slate-800">
+                Policy Document Management
+              </h3>
+              <p class="text-sm text-slate-500">
+                Manage policies across organizations and regions
+              </p>
+            </div>
+            <div class="flex gap-3">
+              <select
+                id="policy-org-filter"
+                onchange="filterPoliciesByOrg()"
+                class="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white"
+              >
+                <option value="">All Organizations</option>
+              </select>
+              <button
+                onclick="openPolicyModal()"
+                class="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition flex items-center gap-2"
+              >
+                <i data-lucide="plus" class="w-4 h-4"></i>
+                New Policy
+              </button>
+              <button
+                onclick="openRuleModal()"
+                class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition flex items-center gap-2"
+              >
+                <i data-lucide="plus" class="w-4 h-4"></i>
+                Add Rule
+              </button>
+            </div>
+          </div>
+
+          <!-- Organization Policies Overview -->
+          <div
+            id="org-policies-overview"
+            class="mb-8 grid grid-cols-1 md:grid-cols-3 gap-4"
+          >
+            <!-- Populated by JS -->
+          </div>
+
+          <!-- Upload Zone -->
+          <div
+            id="policy-dropzone"
+            class="border-2 border-dashed border-slate-300 rounded-xl p-12 text-center transition-all cursor-pointer hover:border-indigo-400 hover:bg-slate-50"
+          >
+            <div
+              class="bg-indigo-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
+            >
+              <i data-lucide="upload-cloud" class="w-8 h-8 text-indigo-600"></i>
+            </div>
+            <p class="text-lg font-medium text-slate-700 mb-2">
+              Drop your policy document here
+            </p>
+            <p class="text-sm text-slate-500 mb-4">
+              Supports PDF, DOCX, and TXT files
+            </p>
+            <input
+              type="file"
+              id="policy-file"
+              accept=".pdf,.txt,.docx"
+              class="hidden"
+              onchange="handlePolicyUpload(event)"
+            />
+            <button
+              onclick="document.getElementById('policy-file').click()"
+              class="bg-slate-800 text-white px-6 py-2 rounded-lg hover:bg-slate-900 transition"
+            >
+              Browse Files
+            </button>
+          </div>
+
+          <!-- Extracted Rules Preview -->
+          <div id="rules-preview" class="mt-8 hidden">
+            <div class="flex items-center justify-between mb-4">
+              <h4 class="text-md font-semibold text-slate-800">
+                Extracted Rules Preview
+              </h4>
+              <div class="flex gap-2">
+                <button
+                  onclick="approveAllRules()"
+                  class="text-sm bg-emerald-100 text-emerald-700 px-3 py-1 rounded-lg hover:bg-emerald-200 transition"
+                >
+                  Approve All
+                </button>
+                <button
+                  onclick="clearRules()"
+                  class="text-sm bg-slate-100 text-slate-700 px-3 py-1 rounded-lg hover:bg-slate-200 transition"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+            <div id="rules-list" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <!-- Rules populated by JS -->
+            </div>
+          </div>
+
+          <!-- Organization Policies Detail -->
+          <div id="org-policies-detail" class="mb-8">
+            <!-- Populated by JS when org selected -->
+          </div>
+
+          <!-- Active Rules -->
+          <div class="mt-8">
+            <h4 class="text-md font-semibold text-slate-800 mb-4">
+              Active Policy Rules
+            </h4>
+            <div id="active-rules-list" class="space-y-3">
+              <!-- Active rules populated by JS -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Attendance Logs Tab -->
+      <div id="content-attendance" class="tab-content hidden">
+        <div class="bg-white rounded-b-xl p-6 card-shadow">
+          <div class="flex items-center justify-between mb-6">
+            <div>
+              <h3 class="text-lg font-semibold text-slate-800">
+                Attendance Log Processing
+              </h3>
+              <p class="text-sm text-slate-500">
+                Upload CSV/Excel files to process and calculate points
+              </p>
+            </div>
+            <button
+              onclick="processAllPending()"
+              class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition flex items-center gap-2"
+            >
+              <i data-lucide="play" class="w-4 h-4"></i>
+              Process All Pending
+            </button>
+          </div>
+
+          <!-- Upload Zone -->
+          <div
+            id="attendance-dropzone"
+            class="border-2 border-dashed border-slate-300 rounded-xl p-12 text-center transition-all cursor-pointer hover:border-indigo-400 hover:bg-slate-50 mb-6"
+          >
+            <div
+              class="bg-emerald-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
+            >
+              <i
+                data-lucide="file-spreadsheet"
+                class="w-8 h-8 text-emerald-600"
+              ></i>
+            </div>
+            <p class="text-lg font-medium text-slate-700 mb-2">
+              Drop attendance logs here
+            </p>
+            <p class="text-sm text-slate-500 mb-4">
+              Supports CSV and Excel files
+            </p>
+            <input
+              type="file"
+              id="attendance-file"
+              accept=".csv,.xlsx,.xls"
+              class="hidden"
+              onchange="handleAttendanceUpload(event)"
+            />
+            <button
+              onclick="document.getElementById('attendance-file').click()"
+              class="bg-slate-800 text-white px-6 py-2 rounded-lg hover:bg-slate-900 transition"
+            >
+              Browse Files
+            </button>
+          </div>
+
+          <!-- Processing Queue -->
+          <div id="processing-queue" class="hidden">
+            <h4 class="text-md font-semibold text-slate-800 mb-4">
+              Processing Queue
+            </h4>
+            <div id="queue-list" class="space-y-3">
+              <!-- Queue items populated by JS -->
+            </div>
+          </div>
+
+          <!-- Recent Processed Logs -->
+          <div class="mt-8">
+            <h4 class="text-md font-semibold text-slate-800 mb-4">
+              Recent Processed Records
+            </h4>
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead class="bg-slate-50 text-slate-600">
+                  <tr>
+                    <th class="text-left py-3 px-4 font-medium">Employee</th>
+                    <th class="text-left py-3 px-4 font-medium">Date</th>
+                    <th class="text-left py-3 px-4 font-medium">Scheduled</th>
+                    <th class="text-left py-3 px-4 font-medium">Actual</th>
+                    <th class="text-left py-3 px-4 font-medium">Violation</th>
+                    <th class="text-left py-3 px-4 font-medium">Points</th>
+                    <th class="text-left py-3 px-4 font-medium">Status</th>
+                  </tr>
+                </thead>
+                <tbody id="processed-logs" class="divide-y divide-slate-100">
+                  <!-- Populated by JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Employees Tab -->
+      <div id="content-employees" class="tab-content hidden">
+        <div class="bg-white rounded-b-xl p-6 card-shadow">
+          <div class="flex items-center justify-between mb-6">
+            <div>
+              <h3 class="text-lg font-semibold text-slate-800">
+                Employee Directory
+              </h3>
+              <p class="text-sm text-slate-500">
+                Manage employee profiles and point balances
+              </p>
+            </div>
+            <div class="flex gap-3">
+              <input
+                type="text"
+                id="employee-search"
+                placeholder="Search employees..."
+                class="border border-slate-200 rounded-lg px-4 py-2 text-sm w-64"
+                oninput="filterEmployees()"
+              />
+              <button
+                onclick="openAddEmployeeModal()"
+                class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition flex items-center gap-2"
+              >
+                <i data-lucide="user-plus" class="w-4 h-4"></i>
+                Add Employee
+              </button>
+            </div>
+          </div>
+
+          <!-- Employee Table -->
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-slate-50 text-slate-600">
+                <tr>
+                  <th
+                    class="text-left py-3 px-4 font-medium cursor-pointer hover:text-slate-800"
+                    onclick="sortEmployees('name')"
+                  >
+                    Employee
+                    <i
+                      data-lucide="chevrons-up-down"
+                      class="w-3 h-3 inline"
+                    ></i>
+                  </th>
+                  <th
+                    class="text-left py-3 px-4 font-medium cursor-pointer hover:text-slate-800"
+                    onclick="sortEmployees('department')"
+                  >
+                    Department
+                    <i
+                      data-lucide="chevrons-up-down"
+                      class="w-3 h-3 inline"
+                    ></i>
+                  </th>
+                  <th
+                    class="text-left py-3 px-4 font-medium cursor-pointer hover:text-slate-800"
+                    onclick="sortEmployees('points')"
+                  >
+                    Current Points
+                    <i
+                      data-lucide="chevrons-up-down"
+                      class="w-3 h-3 inline"
+                    ></i>
+                  </th>
+                  <th class="text-left py-3 px-4 font-medium">Trend</th>
+                  <th class="text-left py-3 px-4 font-medium">Status</th>
+                  <th class="text-left py-3 px-4 font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="employees-table" class="divide-y divide-slate-100">
+                <!-- Populated by JS -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Pagination -->
+          <div class="flex items-center justify-between mt-6">
+            <p class="text-sm text-slate-500">
+              Showing <span id="showing-start">1</span> to
+              <span id="showing-end">10</span> of
+              <span id="total-entries">0</span> entries
+            </p>
+            <div class="flex gap-2">
+              <button
+                onclick="changePage(-1)"
+                class="px-3 py-1 border border-slate-200 rounded-lg hover:bg-slate-50 text-sm"
+              >
+                Previous
+              </button>
+              <button
+                onclick="changePage(1)"
+                class="px-3 py-1 border border-slate-200 rounded-lg hover:bg-slate-50 text-sm"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Employee Detail Modal -->
+    <div
+      id="employee-modal"
+      class="fixed inset-0 modal-overlay hidden z-50 flex items-center justify-center p-4"
+    >
+      <div
+        class="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden animate-fade-in"
+      >
+        <div class="gradient-bg text-white p-6">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-4">
+              <div
+                class="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center text-2xl font-bold"
+                id="modal-avatar"
+              >
+                JD
+              </div>
+              <div>
+                <h2 class="text-2xl font-bold" id="modal-name">John Doe</h2>
+                <p class="text-slate-300" id="modal-role">
+                  Software Engineer • Engineering
+                </p>
+              </div>
+            </div>
+            <button
+              onclick="closeModal('employee-modal')"
+              class="p-2 hover:bg-white/10 rounded-lg transition"
+            >
+              <i data-lucide="x" class="w-6 h-6"></i>
+            </button>
+          </div>
+        </div>
+        <div class="p-6 overflow-y-auto max-h-[60vh]">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <div class="bg-slate-50 rounded-xl p-4">
+              <p class="text-sm text-slate-500 mb-1">Current Points</p>
+              <p class="text-3xl font-bold" id="modal-points">3.5</p>
+              <div class="mt-2 bg-slate-200 rounded-full h-2">
+                <div
+                  class="bg-amber-500 h-2 rounded-full progress-bar"
+                  id="modal-progress"
+                  style="width: 35%"
+                ></div>
+              </div>
+              <p class="text-xs text-slate-500 mt-1">Threshold: 10 points</p>
+            </div>
+            <div class="bg-slate-50 rounded-xl p-4">
+              <p class="text-sm text-slate-500 mb-1">Rolling Period</p>
+              <p class="text-lg font-semibold">6 Months</p>
+              <p class="text-xs text-slate-500 mt-1">
+                Next reset: <span id="modal-reset">Mar 15, 2025</span>
+              </p>
+            </div>
+            <div class="bg-slate-50 rounded-xl p-4">
+              <p class="text-sm text-slate-500 mb-1">Violations (30 days)</p>
+              <p class="text-lg font-semibold" id="modal-violations">4</p>
+              <p class="text-xs text-slate-500 mt-1">Most common: Tardiness</p>
+            </div>
+          </div>
+
+          <!-- Point History -->
+          <h3 class="text-lg font-semibold text-slate-800 mb-4">
+            Point History
+          </h3>
+          <div class="space-y-3 mb-6" id="modal-history">
+            <!-- Populated by JS -->
+          </div>
+
+          <!-- Manual Override -->
+          <div class="border-t border-slate-200 pt-6">
+            <h3 class="text-lg font-semibold text-slate-800 mb-4">
+              Manual Override
+            </h3>
+            <div class="flex gap-4">
+              <select
+                id="override-type"
+                class="border border-slate-200 rounded-lg px-4 py-2 text-sm"
+              >
+                <option value="excuse">Excuse Absence</option>
+                <option value="reduce">Reduce Points</option>
+                <option value="reset">Reset All Points</option>
+              </select>
+              <input
+                type="number"
+                id="override-amount"
+                placeholder="Points"
+                class="border border-slate-200 rounded-lg px-4 py-2 text-sm w-24"
+              />
+              <input
+                type="text"
+                id="override-reason"
+                placeholder="Reason for override..."
+                class="border border-slate-200 rounded-lg px-4 py-2 text-sm flex-1"
+              />
+              <button
+                onclick="applyOverride()"
+                class="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 transition"
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Rule Modal -->
+    <div
+      id="rule-modal"
+      class="fixed inset-0 modal-overlay hidden z-50 flex items-center justify-center p-4"
+    >
+      <div class="bg-white rounded-2xl max-w-lg w-full animate-fade-in">
+        <div class="p-6 border-b border-slate-200">
+          <div class="flex items-center justify-between">
+            <h3 class="text-lg font-semibold text-slate-800">
+              Add Policy Rule
+            </h3>
+            <button
+              onclick="closeModal('rule-modal')"
+              class="p-2 hover:bg-slate-100 rounded-lg transition"
+            >
+              <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+          </div>
+        </div>
+        <div class="p-6">
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-2"
+                >Rule Name</label
+              >
+              <input
+                type="text"
+                id="rule-name"
+                class="w-full border border-slate-200 rounded-lg px-4 py-2"
+                placeholder="e.g., Late Arrival"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-2"
+                >Condition</label
+              >
+              <select
+                id="rule-condition"
+                class="w-full border border-slate-200 rounded-lg px-4 py-2"
+              >
+                <option value="late">Late Arrival</option>
+                <option value="early">Early Departure</option>
+                <option value="absence">Unexcused Absence</option>
+                <option value="no-call">No Call / No Show</option>
+              </select>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-slate-700 mb-2"
+                  >Threshold (minutes)</label
+                >
+                <input
+                  type="number"
+                  id="rule-threshold"
+                  class="w-full border border-slate-200 rounded-lg px-4 py-2"
+                  placeholder="15"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-slate-700 mb-2"
+                  >Points</label
+                >
+                <input
+                  type="number"
+                  id="rule-points"
+                  step="0.5"
+                  class="w-full border border-slate-200 rounded-lg px-4 py-2"
+                  placeholder="0.5"
+                />
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-2"
+                >Description</label
+              >
+              <textarea
+                id="rule-description"
+                rows="3"
+                class="w-full border border-slate-200 rounded-lg px-4 py-2"
+                placeholder="Additional details..."
+              ></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="p-6 border-t border-slate-200 flex justify-end gap-3">
+          <button
+            onclick="closeModal('rule-modal')"
+            class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition"
+          >
+            Cancel
+          </button>
+          <button
+            onclick="saveRule()"
+            class="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 transition"
+          >
+            Save Rule
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Employee Modal -->
+    <div
+      id="add-employee-modal"
+      class="fixed inset-0 modal-overlay hidden z-50 flex items-center justify-center p-4"
+    >
+      <div class="bg-white rounded-2xl max-w-lg w-full animate-fade-in">
+        <div class="p-6 border-b border-slate-200">
+          <div class="flex items-center justify-between">
+            <h3 class="text-lg font-semibold text-slate-800">
+              Add New Employee
+            </h3>
+            <button
+              onclick="closeModal('add-employee-modal')"
+              class="p-2 hover:bg-slate-100 rounded-lg transition"
+            >
+              <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+          </div>
+        </div>
+        <div class="p-6">
+          <div class="space-y-4">
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-slate-700 mb-2"
+                  >First Name</label
+                >
+                <input
+                  type="text"
+                  id="emp-first"
+                  class="w-full border border-slate-200 rounded-lg px-4 py-2"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-slate-700 mb-2"
+                  >Last Name</label
+                >
+                <input
+                  type="text"
+                  id="emp-last"
+                  class="w-full border border-slate-200 rounded-lg px-4 py-2"
+                />
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-2"
+                >Email</label
+              >
+              <input
+                type="email"
+                id="emp-email"
+                class="w-full border border-slate-200 rounded-lg px-4 py-2"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-2"
+                >Organization <span class="text-red-500">*</span></label
+              >
+              <select
+                id="emp-org"
+                onchange="updateRegionAndPolicyOptions()"
+                class="w-full border border-slate-200 rounded-lg px-4 py-2"
+              >
+                <option value="">Select Organization</option>
+              </select>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-slate-700 mb-2"
+                  >Region <span class="text-red-500">*</span></label
+                >
+                <select
+                  id="emp-region"
+                  class="w-full border border-slate-200 rounded-lg px-4 py-2"
+                >
+                  <option value="">Select Region</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-slate-700 mb-2"
+                  >Policy</label
+                >
+                <select
+                  id="emp-policy"
+                  class="w-full border border-slate-200 rounded-lg px-4 py-2"
+                >
+                  <option value="">Auto-assign</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-2"
+                >Department</label
+              >
+              <select
+                id="emp-dept"
+                class="w-full border border-slate-200 rounded-lg px-4 py-2"
+              >
+                <option>Engineering</option>
+                <option>Sales</option>
+                <option>Marketing</option>
+                <option>HR</option>
+                <option>Operations</option>
+                <option>Finance</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-2"
+                >Position</label
+              >
+              <input
+                type="text"
+                id="emp-position"
+                class="w-full border border-slate-200 rounded-lg px-4 py-2"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-2"
+                >Start Date</label
+              >
+              <input
+                type="date"
+                id="emp-start"
+                class="w-full border border-slate-200 rounded-lg px-4 py-2"
+              />
+            </div>
+          </div>
+        </div>
+        <div class="p-6 border-t border-slate-200 flex justify-end gap-3">
+          <button
+            onclick="closeModal('add-employee-modal')"
+            class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition"
+          >
+            Cancel
+          </button>
+          <button
+            onclick="saveEmployee()"
+            class="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 transition"
+          >
+            Add Employee
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Policy Modal -->
+    <div
+      id="policy-modal"
+      class="fixed inset-0 modal-overlay hidden z-50 flex items-center justify-center p-4"
+    >
+      <div class="bg-white rounded-2xl max-w-lg w-full animate-fade-in">
+        <div class="p-6 border-b border-slate-200">
+          <div class="flex items-center justify-between">
+            <h3 class="text-lg font-semibold text-slate-800">
+              Create New Policy
+            </h3>
+            <button
+              onclick="closeModal('policy-modal')"
+              class="p-2 hover:bg-slate-100 rounded-lg transition"
+            >
+              <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+          </div>
+        </div>
+        <div class="p-6">
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-2"
+                >Policy Name</label
+              >
+              <input
+                type="text"
+                id="new-policy-name"
+                class="w-full border border-slate-200 rounded-lg px-4 py-2"
+                placeholder="e.g., Remote Work Policy"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-2"
+                >Organization</label
+              >
+              <select
+                id="new-policy-org"
+                onchange="updateNewPolicyRegions()"
+                class="w-full border border-slate-200 rounded-lg px-4 py-2"
+              >
+                <option value="">Select Organization</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-2"
+                >Region</label
+              >
+              <select
+                id="new-policy-region"
+                class="w-full border border-slate-200 rounded-lg px-4 py-2"
+              >
+                <option value="">Select Region</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-2"
+                >Base Rules On</label
+              >
+              <select
+                id="new-policy-base"
+                class="w-full border border-slate-200 rounded-lg px-4 py-2"
+              >
+                <option value="default">Default Rules</option>
+                <option value="existing">Copy from Existing Policy</option>
+                <option value="blank">Start Blank</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-2"
+                >Effective Date</label
+              >
+              <input
+                type="date"
+                id="new-policy-date"
+                class="w-full border border-slate-200 rounded-lg px-4 py-2"
+              />
+            </div>
+          </div>
+        </div>
+        <div class="p-6 border-t border-slate-200 flex justify-end gap-3">
+          <button
+            onclick="closeModal('policy-modal')"
+            class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition"
+          >
+            Cancel
+          </button>
+          <button
+            onclick="saveNewPolicy()"
+            class="bg-emerald-600 text-white px-6 py-2 rounded-lg hover:bg-emerald-700 transition"
+          >
+            Create Policy
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div
+      id="toast"
+      class="fixed bottom-4 right-4 bg-slate-800 text-white px-6 py-3 rounded-lg shadow-lg hidden notification z-50"
+    >
+      <div class="flex items-center gap-3">
+        <i data-lucide="check-circle" class="w-5 h-5 text-emerald-400"></i>
+        <span id="toast-message">Operation successful</span>
+      </div>
+    </div>
+
+    <script>
+      // Initialize Lucide icons safely
+      if (typeof lucide !== "undefined" && lucide.createIcons) {
+        lucide.createIcons();
+      }
+
+      // ---------------------------------------------------------------
+      // API configuration — change this to your deployed backend URL
+      // ---------------------------------------------------------------
+      const API_BASE = window.location.origin + "/api/v1";
+
+      // Application State
+      const state = {
+        organizations: [],
+        regions: [],
+        policies: [],
+        employees: [],
+        rules: [],
+        pendingRules: [],
+        attendanceLogs: [],
+        processedLogs: [],
+        alerts: [],
+        currentPage: 1,
+        itemsPerPage: 10,
+        currentEmployee: null,
+        sortField: "points",
+        sortDirection: "desc",
+        currentOrganization: null,
+        currentRegion: null,
+      };
+
+      // Default Rules
+      const defaultRules = [
+        {
+          id: 1,
+          name: "Tardiness (> 7 min)",
+          condition: "late",
+          threshold: 7,
+          points: 0.5,
+          description:
+            "Arriving more than 7 minutes after scheduled start time",
+          active: true,
+        },
+        {
+          id: 2,
+          name: "Early Departure (> 15 min)",
+          condition: "early",
+          threshold: 15,
+          points: 0.5,
+          description: "Leaving more than 15 minutes before scheduled end time",
+          active: true,
+        },
+        {
+          id: 3,
+          name: "Unexcused Absence",
+          condition: "absence",
+          threshold: 0,
+          points: 2.0,
+          description: "Missing scheduled shift without prior approval",
+          active: true,
+        },
+        {
+          id: 4,
+          name: "No Call / No Show",
+          condition: "no-call",
+          threshold: 0,
+          points: 3.0,
+          description: "Failing to report absence without notification",
+          active: true,
+        },
+      ];
+
+      // Default Regions
+      const defaultRegions = [
+        {
+          id: "us-west",
+          name: "US West",
+          code: "US-W",
+          timezone: "America/Los_Angeles",
+          laborLaws: "California Labor Code",
+        },
+        {
+          id: "us-east",
+          name: "US East",
+          code: "US-E",
+          timezone: "America/New_York",
+          laborLaws: "Federal FLSA",
+        },
+        {
+          id: "eu-central",
+          name: "EU Central",
+          code: "EU-C",
+          timezone: "Europe/Berlin",
+          laborLaws: "EU Working Time Directive",
+        },
+        {
+          id: "apac",
+          name: "Asia Pacific",
+          code: "APAC",
+          timezone: "Asia/Singapore",
+          laborLaws: "Local Employment Acts",
+        },
+      ];
+
+      // Initialize
+      document.addEventListener("DOMContentLoaded", async () => {
+        await loadDataFromAPI();
+        setupDragAndDrop();
+        populateOrganizationFilter();
+        renderDashboard();
+        renderActiveRules();
+        lucide.createIcons();
+      });
+
+      // ---------------------------------------------------------------
+      // API Data Loading
+      // ---------------------------------------------------------------
+      async function loadDataFromAPI() {
+        try {
+          const [orgsRes, regionsRes, employeesRes, logsRes, alertsRes] =
+            await Promise.all([
+              fetch(`${API_BASE}/organizations`),
+              fetch(`${API_BASE}/regions`),
+              fetch(`${API_BASE}/employees`),
+              fetch(`${API_BASE}/attendance?limit=50`),
+              fetch(`${API_BASE}/alerts?limit=20`),
+            ]);
+
+          const orgsData = await orgsRes.json();
+          const regionsData = await regionsRes.json();
+          const empsData = await employeesRes.json();
+          const logsData = await logsRes.json();
+          const alertsData = await alertsRes.json();
+
+          // Regions
+          state.regions = regionsData.map((r) => ({
+            id: r.id,
+            name: r.name,
+            code: r.code,
+            timezone: r.timezone,
+            laborLaws: r.labor_laws,
+          }));
+
+          // Load all policies and rules in parallel
+          const policiesRes = await fetch(`${API_BASE}/policies`);
+          const policiesData = await policiesRes.json();
+
+          // Build policies with their rules
+          const policyRulesPromises = policiesData.map((p) =>
+            fetch(`${API_BASE}/policies/${p.id}`).then((r) => r.json()),
+          );
+          const fullPolicies = await Promise.all(policyRulesPromises);
+
+          state.policies = fullPolicies.map((p) => ({
+            id: p.id,
+            name: p.name,
+            organizationId: p.organization_id,
+            regionId: p.region_id,
+            active: p.active,
+            effectiveDate: p.effective_date,
+            rules: (p.rules || []).map((r) => ({
+              id: r.id,
+              name: r.name,
+              condition: r.condition,
+              threshold: r.threshold,
+              points: r.points,
+              description: r.description,
+              active: r.active,
+            })),
+          }));
+
+          // Organizations — attach full policy objects
+          state.organizations = orgsData.map((org) => ({
+            id: org.id,
+            name: org.name,
+            code: org.code,
+            active: org.active,
+            regionIds: org.region_ids || [],
+            policies: state.policies.filter((p) => p.organizationId === org.id),
+          }));
+
+          // Global rules (policy_id === null)
+          const rulesRes = await fetch(`${API_BASE}/rules`);
+          const rulesData = await rulesRes.json();
+          state.rules = rulesData
+            .filter((r) => !r.policy_id)
+            .map((r) => ({
+              id: r.id,
+              name: r.name,
+              condition: r.condition,
+              threshold: r.threshold,
+              points: r.points,
+              description: r.description,
+              active: r.active,
+            }));
+
+          // If no global rules, use rules from first policy as display rules
+          if (state.rules.length === 0 && state.policies.length > 0) {
+            state.rules = state.policies[0].rules;
+          }
+
+          // Employees — map snake_case → camelCase
+          state.employees = empsData.map((emp) => ({
+            id: emp.id,
+            firstName: emp.first_name,
+            lastName: emp.last_name,
+            email: emp.email,
+            department: emp.department,
+            position: emp.position,
+            startDate: emp.start_date,
+            points: emp.points,
+            trend: emp.trend,
+            nextReset: emp.next_reset,
+            organizationId: emp.organization_id,
+            regionId: emp.region_id,
+            policyId: emp.policy_id,
+            history: [], // loaded on demand in openEmployeeModal
+          }));
+
+          // Processed logs
+          state.processedLogs = logsData.map((log) => ({
+            id: log.id,
+            employeeId: log.employee_id,
+            employeeName: (() => {
+              const emp = state.employees.find((e) => e.id === log.employee_id);
+              return emp ? `${emp.firstName} ${emp.lastName}` : "Unknown";
+            })(),
+            organizationId: log.organization_id,
+            regionId: log.region_id,
+            policyId: log.policy_id,
+            date: log.date,
+            scheduledIn: log.scheduled_in,
+            scheduledOut: log.scheduled_out,
+            actualIn: log.actual_in,
+            actualOut: log.actual_out,
+            violation: log.violation,
+            points: log.points,
+            status: log.status,
+          }));
+
+          // Alerts
+          state.alerts = alertsData.map((a) => ({
+            type: a.type,
+            message: a.message,
+            time: new Date(a.created_at).toLocaleDateString(),
+            organizationId: a.organization_id,
+          }));
+
+          updateStats();
+        } catch (err) {
+          console.error("Failed to load data from API:", err);
+          showToast("Could not connect to backend — check console.");
+          // Fallback: keep state empty, UI still renders
+        }
+      }
+
+      function initializeData_UNUSED_REPLACED_BY_API() {
+        // Initialize regions
+        state.regions = [...defaultRegions];
+
+        // Initialize organizations with different policies
+        const org1Policies = [
+          {
+            id: "pol-1",
+            name: "TechCorp Standard Policy",
+            regionId: "us-west",
+            rules: [...defaultRules],
+            active: true,
+            effectiveDate: "2024-01-01",
+          },
+          {
+            id: "pol-2",
+            name: "TechCorp Remote Policy",
+            regionId: "us-east",
+            rules: [
+              ...defaultRules.map((r) => ({ ...r, points: r.points * 0.8 })),
+            ],
+            active: true,
+            effectiveDate: "2024-01-01",
+          },
+        ];
+
+        const org2Policies = [
+          {
+            id: "pol-3",
+            name: "Global Solutions EU Policy",
+            regionId: "eu-central",
+            rules: defaultRules.map((r) => ({ ...r, points: r.points * 0.5 })),
+            active: true,
+            effectiveDate: "2024-01-01",
+          },
+        ];
+
+        const org3Policies = [
+          {
+            id: "pol-4",
+            name: "Enterprise APAC Standard",
+            regionId: "apac",
+            rules: [...defaultRules],
+            active: true,
+            effectiveDate: "2024-01-01",
+          },
+          {
+            id: "pol-5",
+            name: "Enterprise APAC Flexible",
+            regionId: "apac",
+            rules: defaultRules.map((r) => ({
+              ...r,
+              threshold: r.threshold * 1.5,
+            })),
+            active: true,
+            effectiveDate: "2024-01-01",
+          },
+        ];
+
+        state.organizations = [
+          {
+            id: "org-1",
+            name: "TechCorp Industries",
+            code: "TCORP",
+            regionIds: ["us-west", "us-east"],
+            policies: org1Policies,
+            active: true,
+          },
+          {
+            id: "org-2",
+            name: "Global Solutions Ltd",
+            code: "GSL",
+            regionIds: ["eu-central"],
+            policies: org2Policies,
+            active: true,
+          },
+          {
+            id: "org-3",
+            name: "Enterprise Holdings",
+            code: "ENT",
+            regionIds: ["apac"],
+            policies: org3Policies,
+            active: true,
+          },
+        ];
+
+        // Store all policies
+        state.policies = [...org1Policies, ...org2Policies, ...org3Policies];
+        state.rules = [...defaultRules];
+
+        // Generate sample employees with organization and policy assignments
+        const departments = [
+          "Engineering",
+          "Sales",
+          "Marketing",
+          "HR",
+          "Operations",
+        ];
+        const firstNames = [
+          "James",
+          "Maria",
+          "Robert",
+          "Jennifer",
+          "Michael",
+          "Linda",
+          "William",
+          "Patricia",
+          "David",
+          "Elizabeth",
+          "Sarah",
+          "Michael",
+          "Emily",
+          "David",
+          "Emma",
+        ];
+        const lastNames = [
+          "Smith",
+          "Johnson",
+          "Williams",
+          "Brown",
+          "Jones",
+          "Garcia",
+          "Miller",
+          "Davis",
+          "Rodriguez",
+          "Martinez",
+          "Chen",
+          "Ross",
+          "Wilson",
+          "Taylor",
+          "Anderson",
+        ];
+
+        let empId = 1;
+        state.organizations.forEach((org) => {
+          const numEmployees = 8 + Math.floor(Math.random() * 10);
+
+          for (let i = 0; i < numEmployees; i++) {
+            const dept =
+              departments[Math.floor(Math.random() * departments.length)];
+            const first =
+              firstNames[Math.floor(Math.random() * firstNames.length)];
+            const last =
+              lastNames[Math.floor(Math.random() * lastNames.length)];
+            const points = Math.random() * 8;
+
+            // Assign random region from org's regions
+            const regionId =
+              org.regionIds[Math.floor(Math.random() * org.regionIds.length)];
+
+            // Find applicable policies for this region
+            const applicablePolicies = org.policies.filter(
+              (p) => p.regionId === regionId,
+            );
+            const assignedPolicy =
+              applicablePolicies[
+                Math.floor(Math.random() * applicablePolicies.length)
+              ];
+
+            state.employees.push({
+              id: empId++,
+              firstName: first,
+              lastName: last,
+              email: `${first.toLowerCase()}.${last.toLowerCase()}@${org.code.toLowerCase()}.com`,
+              department: dept,
+              position: `${dept} ${["Manager", "Specialist", "Lead", "Associate"][Math.floor(Math.random() * 4)]}`,
+              startDate: new Date(
+                2020 + Math.floor(Math.random() * 4),
+                Math.floor(Math.random() * 12),
+                1,
+              )
+                .toISOString()
+                .split("T")[0],
+              points: parseFloat(points.toFixed(1)),
+              trend:
+                Math.random() > 0.5
+                  ? "up"
+                  : Math.random() > 0.5
+                    ? "down"
+                    : "stable",
+              history: generateHistory(points),
+              nextReset: new Date(
+                Date.now() + 180 * 24 * 60 * 60 * 1000,
+              ).toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              }),
+              organizationId: org.id,
+              regionId: regionId,
+              policyId: assignedPolicy.id,
+            });
+          }
+        });
+
+        // Generate sample alerts with org context
+        state.alerts = [
+          {
+            type: "warning",
+            message:
+              "TechCorp: Sarah Chen approaching 8-point threshold (US-West)",
+            time: "2 hours ago",
+            organizationId: "org-1",
+          },
+          {
+            type: "danger",
+            message:
+              "Global Solutions: Pierre Dubois exceeded 10 points - review required",
+            time: "5 hours ago",
+            organizationId: "org-2",
+          },
+          {
+            type: "info",
+            message:
+              "Enterprise Holdings: New policy rules extracted from handbook v2.3",
+            time: "1 day ago",
+            organizationId: "org-3",
+          },
+          {
+            type: "success",
+            message:
+              "TechCorp: Monthly points reset completed for 12 employees",
+            time: "2 days ago",
+            organizationId: "org-1",
+          },
+        ];
+
+        // Generate sample processed logs
+        for (let i = 0; i < 15; i++) {
+          const emp =
+            state.employees[Math.floor(Math.random() * state.employees.length)];
+          const hasViolation = Math.random() > 0.6;
+
+          const org = state.organizations.find(
+            (o) => o.id === emp.organizationId,
+          );
+          const policy = state.policies.find((p) => p.id === emp.policyId);
+          const region = state.regions.find((r) => r.id === emp.regionId);
+
+          state.processedLogs.push({
+            id: i + 1,
+            employeeId: emp.id,
+            employeeName: `${emp.firstName} ${emp.lastName}`,
+            organizationId: emp.organizationId,
+            organizationName: org?.name,
+            regionId: emp.regionId,
+            regionName: region?.name,
+            policyId: emp.policyId,
+            policyName: policy?.name,
+            date: new Date(
+              Date.now() - i * 24 * 60 * 60 * 1000,
+            ).toLocaleDateString("en-US"),
+            scheduledIn: "09:00 AM",
+            scheduledOut: "05:00 PM",
+            actualIn: hasViolation ? "09:12 AM" : "08:55 AM",
+            actualOut:
+              hasViolation && Math.random() > 0.5 ? "04:40 PM" : "05:05 PM",
+            violation: hasViolation
+              ? Math.random() > 0.5
+                ? "Tardiness"
+                : "Early Departure"
+              : null,
+            points: hasViolation ? 0.5 : 0,
+            status: hasViolation ? "Active" : "Compliant",
+          });
+        }
+
+        updateStats();
+      }
+
+      function populateOrganizationFilter() {
+        const orgFilter = document.getElementById("org-filter");
+        if (orgFilter) {
+          orgFilter.innerHTML =
+            '<option value="">All Organizations</option>' +
+            state.organizations
+              .map((org) => `<option value="${org.id}">${org.name}</option>`)
+              .join("");
+        }
+      }
+
+      function filterByOrganization() {
+        const orgId = document.getElementById("org-filter")?.value;
+        state.currentOrganization = orgId || null;
+
+        // Update region filter based on selected organization
+        const regionFilter = document.getElementById("region-filter");
+        if (regionFilter) {
+          if (orgId) {
+            const org = state.organizations.find((o) => o.id === orgId);
+            const orgRegions = state.regions.filter((r) =>
+              org?.regionIds.includes(r.id),
+            );
+            regionFilter.innerHTML =
+              '<option value="">All Regions</option>' +
+              orgRegions
+                .map((r) => `<option value="${r.id}">${r.name}</option>`)
+                .join("");
+            regionFilter.disabled = false;
+          } else {
+            regionFilter.innerHTML =
+              '<option value="">All Regions</option>' +
+              state.regions
+                .map((r) => `<option value="${r.id}">${r.name}</option>`)
+                .join("");
+            regionFilter.disabled = false;
+          }
+        }
+
+        renderDashboard();
+        renderEmployees();
+      }
+
+      function filterByRegion() {
+        const regionId = document.getElementById("region-filter")?.value;
+        state.currentRegion = regionId || null;
+        renderDashboard();
+        renderEmployees();
+      }
+
+      function getFilteredEmployees() {
+        return state.employees.filter((emp) => {
+          if (
+            state.currentOrganization &&
+            emp.organizationId !== state.currentOrganization
+          )
+            return false;
+          if (state.currentRegion && emp.regionId !== state.currentRegion)
+            return false;
+          return true;
+        });
+      }
+
+      function getOrganizationName(orgId) {
+        return (
+          state.organizations.find((o) => o.id === orgId)?.name || "Unknown"
+        );
+      }
+
+      function getRegionName(regionId) {
+        return state.regions.find((r) => r.id === regionId)?.name || "Unknown";
+      }
+
+      function getPolicyName(policyId) {
+        return (
+          state.policies.find((p) => p.id === policyId)?.name ||
+          "Default Policy"
+        );
+      }
+
+      function getEmployeePolicyRules(employeeId) {
+        const emp = state.employees.find((e) => e.id === employeeId);
+        if (!emp) return state.rules;
+
+        const policy = state.policies.find((p) => p.id === emp.policyId);
+        return policy?.rules || state.rules;
+      }
+
+      function generateHistory(currentPoints) {
+        const history = [];
+        let remaining = currentPoints;
+        const violations = [
+          "Tardiness",
+          "Early Departure",
+          "Unexcused Absence",
+        ];
+
+        while (remaining > 0) {
+          const points = remaining >= 2 ? 2 : 0.5;
+          history.push({
+            date: new Date(
+              Date.now() - Math.floor(Math.random() * 90) * 24 * 60 * 60 * 1000,
+            ).toLocaleDateString("en-US"),
+            type: violations[Math.floor(Math.random() * violations.length)],
+            points: points,
+            status: "Active",
+          });
+          remaining -= points;
+        }
+        return history.sort((a, b) => new Date(b.date) - new Date(a.date));
+      }
+
+      function setupDragAndDrop() {
+        // Policy dropzone
+        const policyZone = document.getElementById("policy-dropzone");
+        policyZone.addEventListener("dragover", (e) => {
+          e.preventDefault();
+          policyZone.classList.add("drag-active");
+        });
+        policyZone.addEventListener("dragleave", () => {
+          policyZone.classList.remove("drag-active");
+        });
+        policyZone.addEventListener("drop", (e) => {
+          e.preventDefault();
+          policyZone.classList.remove("drag-active");
+          const files = e.dataTransfer.files;
+          if (files.length > 0) processPolicyFile(files[0]);
+        });
+
+        // Attendance dropzone
+        const attendanceZone = document.getElementById("attendance-dropzone");
+        attendanceZone.addEventListener("dragover", (e) => {
+          e.preventDefault();
+          attendanceZone.classList.add("drag-active");
+        });
+        attendanceZone.addEventListener("dragleave", () => {
+          attendanceZone.classList.remove("drag-active");
+        });
+        attendanceZone.addEventListener("drop", (e) => {
+          e.preventDefault();
+          attendanceZone.classList.remove("drag-active");
+          const files = e.dataTransfer.files;
+          if (files.length > 0) processAttendanceFile(files[0]);
+        });
+      }
+
+      // Tab Switching
+      function switchTab(tabName) {
+        document
+          .querySelectorAll(".tab-content")
+          .forEach((el) => el.classList.add("hidden"));
+        document
+          .getElementById(`content-${tabName}`)
+          .classList.remove("hidden");
+
+        document.querySelectorAll('[id^="tab-"]').forEach((el) => {
+          el.classList.remove("tab-active");
+          el.classList.add("text-slate-600");
+        });
+        document.getElementById(`tab-${tabName}`).classList.add("tab-active");
+        document
+          .getElementById(`tab-${tabName}`)
+          .classList.remove("text-slate-600");
+
+        if (tabName === "dashboard") {
+          setTimeout(() => renderDashboard(), 50);
+        }
+        if (tabName === "employees") renderEmployees();
+        if (tabName === "attendance") renderProcessedLogs();
+        if (typeof lucide !== "undefined" && lucide.createIcons) {
+          lucide.createIcons();
+        }
+      }
+
+      // Dashboard Rendering
+      function renderDashboard() {
+        // Update stats
+        updateStats();
+
+        // Update filter display text
+        const filterDisplay = document.getElementById("current-filter-display");
+        const orgName = state.currentOrganization
+          ? getOrganizationName(state.currentOrganization)
+          : null;
+        const regionName = state.currentRegion
+          ? getRegionName(state.currentRegion)
+          : null;
+
+        if (orgName && regionName) {
+          filterDisplay.textContent = `Showing: ${orgName} • ${regionName}`;
+        } else if (orgName) {
+          filterDisplay.textContent = `Showing: ${orgName} • All Regions`;
+        } else if (regionName) {
+          filterDisplay.textContent = `Showing: All Organizations • ${regionName}`;
+        } else {
+          filterDisplay.textContent = "Showing: All Organizations and Regions";
+        }
+
+        // Render alerts (filtered by org if selected)
+        const alertsList = document.getElementById("alerts-list");
+        let filteredAlerts = state.alerts;
+        if (state.currentOrganization) {
+          filteredAlerts = filteredAlerts.filter(
+            (a) =>
+              !a.organizationId ||
+              a.organizationId === state.currentOrganization,
+          );
+        }
+
+        alertsList.innerHTML = filteredAlerts
+          .map(
+            (alert) => `
+                <div class="flex items-start gap-3 p-3 rounded-lg ${alert.type === "danger" ? "bg-red-50" : alert.type === "warning" ? "bg-amber-50" : alert.type === "success" ? "bg-emerald-50" : "bg-slate-50"}">
+                    <i data-lucide="${alert.type === "danger" ? "alert-circle" : alert.type === "warning" ? "alert-triangle" : alert.type === "success" ? "check-circle" : "info"}" 
+                       class="w-5 h-5 ${alert.type === "danger" ? "text-red-500" : alert.type === "warning" ? "text-amber-500" : alert.type === "success" ? "text-emerald-500" : "text-slate-500"} flex-shrink-0"></i>
+                    <div class="flex-1">
+                        <p class="text-sm text-slate-700">${alert.message}</p>
+                        <p class="text-xs text-slate-400 mt-1">${alert.time}</p>
+                    </div>
+                </div>
+            `,
+          )
+          .join("");
+
+        // Render top violators (filtered)
+        const filteredEmployees = getFilteredEmployees();
+        const topViolators = [...filteredEmployees]
+          .sort((a, b) => b.points - a.points)
+          .slice(0, 6);
+        document.getElementById("top-violators").innerHTML = topViolators
+          .map(
+            (emp) => `
+                <div class="bg-slate-50 rounded-xl p-4 flex items-center gap-4">
+                    <div class="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-bold">
+                        ${emp.firstName[0]}${emp.lastName[0]}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="font-medium text-slate-800 truncate">${emp.firstName} ${emp.lastName}</p>
+                        <p class="text-sm text-slate-500 truncate">${emp.department}</p>
+                        <p class="text-xs text-slate-400 truncate">${getOrganizationName(emp.organizationId)} • ${getRegionName(emp.regionId)}</p>
+                    </div>
+                    <div class="text-right flex-shrink-0">
+                        <p class="text-2xl font-bold ${emp.points >= 8 ? "text-red-600" : emp.points >= 5 ? "text-amber-600" : "text-slate-600"}">${emp.points}</p>
+                        <p class="text-xs text-slate-400">points</p>
+                    </div>
+                </div>
+            `,
+          )
+          .join("");
+
+        // Render chart
+        setTimeout(() => renderTrendsChart(), 100);
+        if (typeof lucide !== "undefined" && lucide.createIcons) {
+          lucide.createIcons();
+        }
+      }
+
+      function updateStats() {
+        const filteredEmployees = getFilteredEmployees();
+        const filteredLogs = state.processedLogs.filter((l) => {
+          if (
+            state.currentOrganization &&
+            l.organizationId !== state.currentOrganization
+          )
+            return false;
+          if (state.currentRegion && l.regionId !== state.currentRegion)
+            return false;
+          return true;
+        });
+
+        document.getElementById("total-employees").textContent =
+          filteredEmployees.length;
+        document.getElementById("active-violations").textContent =
+          filteredLogs.filter((l) => l.violation).length;
+        document.getElementById("red-flags").textContent =
+          filteredEmployees.filter((e) => e.points >= 8).length;
+        document.getElementById("total-orgs").textContent =
+          state.currentOrganization ? 1 : state.organizations.length;
+      }
+
+      // Chart instance tracker
+      let trendsChartInstance = null;
+
+      function renderTrendsChart() {
+        const canvas = document.getElementById("trendsChart");
+        if (!canvas) return;
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+
+        // Destroy existing chart if it exists
+        if (
+          trendsChartInstance &&
+          typeof trendsChartInstance.destroy === "function"
+        ) {
+          trendsChartInstance.destroy();
+          trendsChartInstance = null;
+        }
+
+        const months = ["Aug", "Sep", "Oct", "Nov", "Dec", "Jan"];
+        const data = months.map(() => Math.floor(Math.random() * 40) + 15);
+
+        // Clear any existing chart data on canvas
+        if (canvas.chart) {
+          canvas.chart.destroy();
+          canvas.chart = null;
+        }
+
+        trendsChartInstance = new Chart(ctx, {
+          type: "line",
+          data: {
+            labels: months,
+            datasets: [
+              {
+                label: "Total Points",
+                data: data,
+                borderColor: "#6366f1",
+                backgroundColor: "rgba(99, 102, 241, 0.1)",
+                fill: true,
+                tension: 0.4,
+                pointBackgroundColor: "#6366f1",
+                pointBorderColor: "#fff",
+                pointBorderWidth: 2,
+                pointRadius: 4,
+              },
+              {
+                label: "Threshold",
+                data: months.map(() => 60),
+                borderColor: "#ef4444",
+                borderDash: [5, 5],
+                fill: false,
+                pointRadius: 0,
+                borderWidth: 2,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+              intersect: false,
+              mode: "index",
+            },
+            plugins: {
+              legend: {
+                position: "bottom",
+                labels: {
+                  usePointStyle: true,
+                  padding: 20,
+                },
+              },
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                max: 80,
+                ticks: {
+                  stepSize: 10,
+                },
+                grid: {
+                  color: "rgba(0, 0, 0, 0.05)",
+                },
+              },
+              x: {
+                grid: {
+                  display: false,
+                },
+              },
+            },
+          },
+        });
+      }
+
+      // Policy Management
+      function handlePolicyUpload(event) {
+        const file = event.target.files[0];
+        if (file) processPolicyFile(file);
+      }
+
+      function processPolicyFile(file) {
+        showToast(`Processing ${file.name}...`);
+
+        // Simulate AI extraction
+        setTimeout(() => {
+          const extractedRules = [
+            {
+              id: Date.now(),
+              name: "Extended Lunch (> 45 min)",
+              condition: "extended-break",
+              threshold: 45,
+              points: 0.5,
+              description: "Taking lunch break longer than 45 minutes",
+              active: false,
+            },
+            {
+              id: Date.now() + 1,
+              name: "Unauthorized Overtime",
+              condition: "unauthorized-ot",
+              threshold: 0,
+              points: 1.0,
+              description: "Working overtime without prior approval",
+              active: false,
+            },
+          ];
+
+          state.pendingRules = extractedRules;
+          renderPendingRules();
+          document.getElementById("rules-preview").classList.remove("hidden");
+          showToast("Rules extracted successfully!");
+        }, 2000);
+      }
+
+      function renderPendingRules() {
+        document.getElementById("rules-list").innerHTML = state.pendingRules
+          .map(
+            (rule) => `
+                <div class="rule-card bg-slate-50 rounded-xl p-4 border-2 border-dashed border-slate-300">
+                    <div class="flex items-start justify-between mb-2">
+                        <h5 class="font-medium text-slate-800">${rule.name}</h5>
+                        <span class="bg-amber-100 text-amber-700 text-xs px-2 py-1 rounded-full">Pending</span>
+                    </div>
+                    <p class="text-sm text-slate-500 mb-3">${rule.description}</p>
+                    <div class="flex items-center gap-4 text-sm mb-3">
+                        <span class="text-slate-600"><i data-lucide="clock" class="w-4 h-4 inline mr-1"></i> > ${rule.threshold} min</span>
+                        <span class="text-slate-600"><i data-lucide="alert-circle" class="w-4 h-4 inline mr-1"></i> ${rule.points} pts</span>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="approveRule(${rule.id})" class="flex-1 bg-emerald-100 text-emerald-700 py-2 rounded-lg text-sm font-medium hover:bg-emerald-200 transition">Approve</button>
+                        <button onclick="rejectRule(${rule.id})" class="flex-1 bg-slate-100 text-slate-700 py-2 rounded-lg text-sm font-medium hover:bg-slate-200 transition">Reject</button>
+                    </div>
+                </div>
+            `,
+          )
+          .join("");
+        lucide.createIcons();
+      }
+
+      function approveRule(id) {
+        const rule = state.pendingRules.find((r) => r.id === id);
+        if (rule) {
+          rule.active = true;
+          state.rules.push(rule);
+          state.pendingRules = state.pendingRules.filter((r) => r.id !== id);
+          renderPendingRules();
+          renderActiveRules();
+          updateStats();
+          showToast("Rule approved and activated");
+        }
+      }
+
+      function rejectRule(id) {
+        state.pendingRules = state.pendingRules.filter((r) => r.id !== id);
+        renderPendingRules();
+        showToast("Rule rejected");
+      }
+
+      function approveAllRules() {
+        state.pendingRules.forEach((rule) => {
+          rule.active = true;
+          state.rules.push(rule);
+        });
+        state.pendingRules = [];
+        renderPendingRules();
+        renderActiveRules();
+        updateStats();
+        showToast("All rules approved");
+      }
+
+      function clearRules() {
+        state.pendingRules = [];
+        renderPendingRules();
+        document.getElementById("rules-preview").classList.add("hidden");
+      }
+
+      function renderActiveRules() {
+        // Populate policy org filter
+        const policyOrgFilter = document.getElementById("policy-org-filter");
+        if (policyOrgFilter && policyOrgFilter.children.length <= 1) {
+          policyOrgFilter.innerHTML =
+            '<option value="">All Organizations</option>' +
+            state.organizations
+              .map((org) => `<option value="${org.id}">${org.name}</option>`)
+              .join("");
+        }
+
+        // Show organization overview cards
+        const overviewContainer = document.getElementById(
+          "org-policies-overview",
+        );
+        if (overviewContainer) {
+          overviewContainer.innerHTML = state.organizations
+            .map(
+              (org) => `
+                    <div class="bg-slate-50 rounded-xl p-4 border-2 ${state.currentOrganization === org.id ? "border-indigo-500" : "border-transparent"} hover:border-indigo-300 transition cursor-pointer" onclick="selectOrgForPolicies('${org.id}')">
+                        <div class="flex items-center gap-3 mb-3">
+                            <div class="bg-indigo-100 p-2 rounded-lg">
+                                <i data-lucide="building" class="w-5 h-5 text-indigo-600"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-slate-800">${org.name}</h4>
+                                <p class="text-xs text-slate-500">${org.code}</p>
+                            </div>
+                        </div>
+                        <div class="space-y-2">
+                            <div class="flex justify-between text-sm">
+                                <span class="text-slate-500">Policies:</span>
+                                <span class="font-medium text-slate-800">${org.policies.length}</span>
+                            </div>
+                            <div class="flex justify-between text-sm">
+                                <span class="text-slate-500">Regions:</span>
+                                <span class="font-medium text-slate-800">${org.regionIds.length}</span>
+                            </div>
+                            <div class="flex flex-wrap gap-1 mt-2">
+                                ${org.regionIds
+                                  .map((rid) => {
+                                    const region = state.regions.find(
+                                      (r) => r.id === rid,
+                                    );
+                                    return `<span class="text-xs bg-slate-200 text-slate-600 px-2 py-1 rounded">${region?.name || rid}</span>`;
+                                  })
+                                  .join("")}
+                            </div>
+                        </div>
+                    </div>
+                `,
+            )
+            .join("");
+        }
+
+        // Show detailed policies if org selected
+        const detailContainer = document.getElementById("org-policies-detail");
+        if (detailContainer && state.currentOrganization) {
+          const org = state.organizations.find(
+            (o) => o.id === state.currentOrganization,
+          );
+          if (org) {
+            detailContainer.innerHTML = `
+                        <h4 class="text-md font-semibold text-slate-800 mb-4">${org.name} - Policies</h4>
+                        <div class="space-y-4">
+                            ${org.policies
+                              .map(
+                                (policy) => `
+                                <div class="bg-white border border-slate-200 rounded-xl p-4">
+                                    <div class="flex items-center justify-between mb-3">
+                                        <div>
+                                            <h5 class="font-medium text-slate-800">${policy.name}</h5>
+                                            <p class="text-sm text-slate-500">Region: ${getRegionName(policy.regionId)} • Effective: ${policy.effectiveDate}</p>
+                                        </div>
+                                        <span class="status-badge ${policy.active ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}">
+                                            ${policy.active ? "Active" : "Inactive"}
+                                        </span>
+                                    </div>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        ${policy.rules
+                                          .map(
+                                            (rule) => `
+                                            <div class="bg-slate-50 rounded-lg p-3 text-sm">
+                                                <div class="flex items-center justify-between">
+                                                    <span class="font-medium text-slate-700">${rule.name}</span>
+                                                    <span class="text-slate-500">${rule.points} pts</span>
+                                                </div>
+                                                <p class="text-xs text-slate-400 mt-1">${rule.description}</p>
+                                            </div>
+                                        `,
+                                          )
+                                          .join("")}
+                                    </div>
+                                </div>
+                            `,
+                              )
+                              .join("")}
+                        </div>
+                    `;
+            detailContainer.classList.remove("hidden");
+          }
+        } else if (detailContainer) {
+          detailContainer.classList.add("hidden");
+        }
+
+        document.getElementById("active-rules-list").innerHTML = state.rules
+          .map(
+            (rule) => `
+                <div class="flex items-center justify-between p-4 bg-slate-50 rounded-xl">
+                    <div class="flex items-center gap-4">
+                        <div class="bg-indigo-100 p-2 rounded-lg">
+                            <i data-lucide="gavel" class="w-5 h-5 text-indigo-600"></i>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-slate-800">${rule.name}</h5>
+                            <p class="text-sm text-slate-500">${rule.description}</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-6">
+                        <div class="text-right">
+                            <p class="text-sm text-slate-500">Threshold</p>
+                            <p class="font-medium text-slate-800">${rule.threshold > 0 ? `> ${rule.threshold} min` : "Any"}</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-sm text-slate-500">Points</p>
+                            <p class="font-medium text-slate-800">${rule.points}</p>
+                        </div>
+                        <button onclick="toggleRule(${rule.id})" class="p-2 ${rule.active ? "text-emerald-600" : "text-slate-400"} hover:bg-slate-200 rounded-lg transition">
+                            <i data-lucide="${rule.active ? "check-circle" : "circle"}" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                </div>
+            `,
+          )
+          .join("");
+        lucide.createIcons();
+      }
+
+      function filterPoliciesByOrg() {
+        const orgId = document.getElementById("policy-org-filter")?.value;
+        state.currentOrganization = orgId || null;
+        renderActiveRules();
+      }
+
+      function selectOrgForPolicies(orgId) {
+        state.currentOrganization = orgId;
+        document.getElementById("policy-org-filter").value = orgId;
+        renderActiveRules();
+      }
+
+      function toggleRule(id) {
+        const rule = state.rules.find((r) => r.id === id);
+        if (rule) {
+          rule.active = !rule.active;
+          renderActiveRules();
+          showToast(`Rule ${rule.active ? "activated" : "deactivated"}`);
+        }
+      }
+
+      function openRuleModal() {
+        document.getElementById("rule-modal").classList.remove("hidden");
+      }
+
+      function saveRule() {
+        const rule = {
+          id: Date.now(),
+          name: document.getElementById("rule-name").value,
+          condition: document.getElementById("rule-condition").value,
+          threshold:
+            parseInt(document.getElementById("rule-threshold").value) || 0,
+          points: parseFloat(document.getElementById("rule-points").value) || 0,
+          description: document.getElementById("rule-description").value,
+          active: true,
+        };
+
+        state.rules.push(rule);
+        renderActiveRules();
+        updateStats();
+        closeModal("rule-modal");
+        showToast("Rule saved successfully");
+
+        // Clear form
+        document.getElementById("rule-name").value = "";
+        document.getElementById("rule-threshold").value = "";
+        document.getElementById("rule-points").value = "";
+        document.getElementById("rule-description").value = "";
+      }
+
+      // Attendance Processing
+      function handleAttendanceUpload(event) {
+        const file = event.target.files[0];
+        if (file) processAttendanceFile(file);
+      }
+
+      async function processAttendanceFile(file) {
+        const queueItem = {
+          id: Date.now(),
+          name: file.name,
+          size: (file.size / 1024).toFixed(1) + " KB",
+          status: "processing",
+          progress: 50,
+        };
+
+        state.attendanceLogs.push(queueItem);
+        renderQueue();
+        document.getElementById("processing-queue").classList.remove("hidden");
+
+        try {
+          const formData = new FormData();
+          formData.append('file', file);
+          const res = await fetch(`${API_BASE}/attendance/upload`, {
+            method: 'POST',
+            body: formData,
+          });
+          const result = await res.json();
+
+          queueItem.status = "completed";
+          queueItem.progress = 100;
+          renderQueue();
+
+          // Reload processed logs from server
+          const logsRes = await fetch(`${API_BASE}/attendance?limit=50`);
+          const logsData = await logsRes.json();
+          state.processedLogs = logsData.map(log => ({
+            id: log.id,
+            employeeId: log.employee_id,
+            employeeName: (() => {
+              const emp = state.employees.find(e => e.id === log.employee_id);
+              return emp ? `${emp.firstName} ${emp.lastName}` : 'Unknown';
+            })(),
+            organizationId: log.organization_id,
+            regionId: log.region_id,
+            policyId: log.policy_id,
+            date: log.date,
+            scheduledIn: log.scheduled_in,
+            scheduledOut: log.scheduled_out,
+            actualIn: log.actual_in,
+            actualOut: log.actual_out,
+            violation: log.violation,
+            points: log.points,
+            status: log.status,
+          }));
+
+          // Reload employees to get updated points
+          const empsRes = await fetch(`${API_BASE}/employees`);
+          const empsData = await empsRes.json();
+          state.employees = empsData.map(emp => ({
+            id: emp.id,
+            firstName: emp.first_name,
+            lastName: emp.last_name,
+            email: emp.email,
+            department: emp.department,
+            position: emp.position,
+            startDate: emp.start_date,
+            points: emp.points,
+            trend: emp.trend,
+            nextReset: emp.next_reset,
+            organizationId: emp.organization_id,
+            regionId: emp.region_id,
+            policyId: emp.policy_id,
+            history: [],
+          }));
+
+          updateStats();
+          renderProcessedLogs();
+          renderEmployees();
+          showToast(`Processed ${result.records_processed} records, ${result.violations_found} violations found`);
+        } catch (err) {
+          queueItem.status = "completed";
+          queueItem.progress = 100;
+          renderQueue();
+          console.error('Upload failed:', err);
+          showToast('Upload failed — check console');
+        }
+      }
+
+      function renderQueue() {
+        document.getElementById("queue-list").innerHTML = state.attendanceLogs
+          .map(
+            (item) => `
+                <div class="flex items-center gap-4 p-4 bg-slate-50 rounded-xl">
+                    <div class="bg-emerald-100 p-2 rounded-lg">
+                        <i data-lucide="file-spreadsheet" class="w-5 h-5 text-emerald-600"></i>
+                    </div>
+                    <div class="flex-1">
+                        <p class="font-medium text-slate-800">${item.name}</p>
+                        <p class="text-sm text-slate-500">${item.size}</p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        ${
+                          item.status === "processing"
+                            ? `
+                            <div class="w-32 bg-slate-200 rounded-full h-2">
+                                <div class="bg-indigo-600 h-2 rounded-full progress-bar" style="width: ${item.progress}%"></div>
+                            </div>
+                            <span class="text-sm text-slate-500">${item.progress}%</span>
+                        `
+                            : `
+                            <span class="text-emerald-600 flex items-center gap-1">
+                                <i data-lucide="check-circle" class="w-4 h-4"></i>
+                                Completed
+                            </span>
+                        `
+                        }
+                    </div>
+                </div>
+            `,
+          )
+          .join("");
+        lucide.createIcons();
+      }
+
+      function generateProcessedRecords() {
+        for (let i = 0; i < 5; i++) {
+          const emp =
+            state.employees[Math.floor(Math.random() * state.employees.length)];
+          const hasViolation = Math.random() > 0.4;
+          const violation = hasViolation
+            ? ["Tardiness", "Early Departure", "Unexcused Absence"][
+                Math.floor(Math.random() * 3)
+              ]
+            : null;
+          const points =
+            violation === "Unexcused Absence" ? 2.0 : hasViolation ? 0.5 : 0;
+
+          if (hasViolation) {
+            emp.points = parseFloat((emp.points + points).toFixed(1));
+            emp.history.unshift({
+              date: new Date().toLocaleDateString("en-US"),
+              type: violation,
+              points: points,
+              status: "Active",
+            });
+          }
+
+          state.processedLogs.unshift({
+            id: Date.now() + i,
+            employeeId: emp.id,
+            employeeName: `${emp.firstName} ${emp.lastName}`,
+            date: new Date().toLocaleDateString("en-US"),
+            scheduledIn: "09:00 AM",
+            scheduledOut: "05:00 PM",
+            actualIn: hasViolation ? "09:15 AM" : "08:58 AM",
+            actualOut:
+              hasViolation && violation === "Early Departure"
+                ? "04:30 PM"
+                : "05:02 PM",
+            violation: violation,
+            points: points,
+            status: hasViolation ? "Violation" : "Compliant",
+          });
+        }
+        updateStats();
+        renderProcessedLogs();
+      }
+
+      function processAllPending() {
+        showToast("Processing all pending logs...");
+        setTimeout(() => {
+          generateProcessedRecords();
+          showToast("All logs processed");
+        }, 1500);
+      }
+
+      function renderProcessedLogs() {
+        document.getElementById("processed-logs").innerHTML =
+          state.processedLogs
+            .slice(0, 10)
+            .map(
+              (log) => `
+                <tr class="table-row transition">
+                    <td class="py-3 px-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center text-xs font-medium text-indigo-600">
+                                ${log.employeeName
+                                  .split(" ")
+                                  .map((n) => n[0])
+                                  .join("")}
+                            </div>
+                            <span class="font-medium text-slate-800">${log.employeeName}</span>
+                        </div>
+                    </td>
+                    <td class="py-3 px-4 text-slate-600">${log.date}</td>
+                    <td class="py-3 px-4 text-slate-600">${log.scheduledIn} - ${log.scheduledOut}</td>
+                    <td class="py-3 px-4 text-slate-600">${log.actualIn} - ${log.actualOut}</td>
+                    <td class="py-3 px-4">
+                        ${log.violation ? `<span class="status-badge bg-red-100 text-red-700">${log.violation}</span>` : '<span class="text-slate-400">-</span>'}
+                    </td>
+                    <td class="py-3 px-4">
+                        ${log.points > 0 ? `<span class="font-medium text-red-600">+${log.points}</span>` : '<span class="text-slate-400">0</span>'}
+                    </td>
+                    <td class="py-3 px-4">
+                        <span class="status-badge ${log.status === "Compliant" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}">${log.status}</span>
+                    </td>
+                </tr>
+            `,
+            )
+            .join("");
+      }
+
+      // Employee Management
+      function renderEmployees() {
+        const search = document
+          .getElementById("employee-search")
+          .value.toLowerCase();
+        let filtered = getFilteredEmployees().filter(
+          (emp) =>
+            emp.firstName.toLowerCase().includes(search) ||
+            emp.lastName.toLowerCase().includes(search) ||
+            emp.department.toLowerCase().includes(search) ||
+            getOrganizationName(emp.organizationId)
+              .toLowerCase()
+              .includes(search) ||
+            getRegionName(emp.regionId).toLowerCase().includes(search),
+        );
+
+        // Sort
+        filtered.sort((a, b) => {
+          let aVal = a[state.sortField];
+          let bVal = b[state.sortField];
+          if (state.sortField === "name") {
+            aVal = a.firstName + " " + a.lastName;
+            bVal = b.firstName + " " + b.lastName;
+          }
+          if (state.sortDirection === "desc") {
+            [aVal, bVal] = [bVal, aVal];
+          }
+          return aVal > bVal ? 1 : -1;
+        });
+
+        // Pagination
+        const start = (state.currentPage - 1) * state.itemsPerPage;
+        const end = start + state.itemsPerPage;
+        const paginated = filtered.slice(start, end);
+
+        document.getElementById("employees-table").innerHTML = paginated
+          .map(
+            (emp) => `
+                <tr class="table-row transition cursor-pointer" onclick="openEmployeeModal(${emp.id})">
+                    <td class="py-4 px-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center font-medium text-indigo-600">
+                                ${emp.firstName[0]}${emp.lastName[0]}
+                            </div>
+                            <div>
+                                <p class="font-medium text-slate-800">${emp.firstName} ${emp.lastName}</p>
+                                <p class="text-sm text-slate-500">${emp.email}</p>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="py-4 px-4">
+                        <span class="status-badge bg-slate-100 text-slate-700">${emp.department}</span>
+                        <div class="mt-1 flex flex-wrap gap-1">
+                            <span class="text-xs text-slate-400">${getOrganizationName(emp.organizationId)}</span>
+                            <span class="text-xs text-slate-400">•</span>
+                            <span class="text-xs text-slate-400">${getRegionName(emp.regionId)}</span>
+                        </div>
+                    </td>
+                    <td class="py-4 px-4">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xl font-bold ${emp.points >= 8 ? "text-red-600" : emp.points >= 5 ? "text-amber-600" : "text-slate-700"}">${emp.points}</span>
+                            <div class="w-16 bg-slate-200 rounded-full h-1.5">
+                                <div class="${emp.points >= 8 ? "bg-red-500" : emp.points >= 5 ? "bg-amber-500" : "bg-emerald-500"} h-1.5 rounded-full progress-bar" style="width: ${Math.min(emp.points * 10, 100)}%"></div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="py-4 px-4">
+                        <span class="flex items-center gap-1 ${emp.trend === "up" ? "trend-up" : emp.trend === "down" ? "trend-down" : "trend-stable"}">
+                            <i data-lucide="${emp.trend === "up" ? "trending-up" : emp.trend === "down" ? "trending-down" : "minus"}" class="w-4 h-4"></i>
+                            ${emp.trend === "up" ? "Rising" : emp.trend === "down" ? "Improving" : "Stable"}
+                        </span>
+                    </td>
+                    <td class="py-4 px-4">
+                        ${
+                          emp.points >= 8
+                            ? '<span class="status-badge bg-red-100 text-red-700 flex items-center gap-1"><i data-lucide="flag" class="w-3 h-3"></i> Red Flag</span>'
+                            : emp.points >= 5
+                              ? '<span class="status-badge bg-amber-100 text-amber-700">Warning</span>'
+                              : '<span class="status-badge bg-emerald-100 text-emerald-700">Good Standing</span>'
+                        }
+                    </td>
+                    <td class="py-4 px-4">
+                        <button onclick="event.stopPropagation(); openEmployeeModal(${emp.id})" class="p-2 hover:bg-slate-100 rounded-lg transition">
+                            <i data-lucide="more-horizontal" class="w-5 h-5 text-slate-400"></i>
+                        </button>
+                    </td>
+                </tr>
+            `,
+          )
+          .join("");
+
+        document.getElementById("showing-start").textContent = start + 1;
+        document.getElementById("showing-end").textContent = Math.min(
+          end,
+          filtered.length,
+        );
+        document.getElementById("total-entries").textContent = filtered.length;
+
+        lucide.createIcons();
+      }
+
+      function filterEmployees() {
+        state.currentPage = 1;
+        renderEmployees();
+      }
+
+      function sortEmployees(field) {
+        if (state.sortField === field) {
+          state.sortDirection = state.sortDirection === "asc" ? "desc" : "asc";
+        } else {
+          state.sortField = field;
+          state.sortDirection = "desc";
+        }
+        renderEmployees();
+      }
+
+      function changePage(delta) {
+        const maxPage = Math.ceil(state.employees.length / state.itemsPerPage);
+        state.currentPage = Math.max(
+          1,
+          Math.min(maxPage, state.currentPage + delta),
+        );
+        renderEmployees();
+      }
+
+      async function openEmployeeModal(id) {
+        const emp = state.employees.find((e) => e.id === id);
+        if (!emp) return;
+
+        state.currentEmployee = emp;
+
+        // Fetch fresh detail (includes point_history) from API
+        try {
+          const res = await fetch(`${API_BASE}/employees/${id}`);
+          const data = await res.json();
+          emp.points = data.points;
+          emp.trend = data.trend;
+          emp.history = (data.point_history || []).map(h => ({
+            date: h.date,
+            type: h.type,
+            points: h.points,
+            status: h.status,
+            reason: h.reason,
+          }));
+        } catch (e) {
+          console.warn('Could not fetch employee detail:', e);
+        }
+
+        document.getElementById("modal-avatar").textContent =
+          `${emp.firstName[0]}${emp.lastName[0]}`;
+        document.getElementById("modal-name").textContent =
+          `${emp.firstName} ${emp.lastName}`;
+
+        const roleElement = document.getElementById("modal-role");
+        roleElement.innerHTML = `${emp.position} • ${emp.department}<br><span class="text-sm text-slate-400">${getOrganizationName(emp.organizationId)} • ${getRegionName(emp.regionId)}<br>Policy: ${getPolicyName(emp.policyId)}</span>`;
+        document.getElementById("modal-points").textContent = emp.points;
+        document.getElementById("modal-points").className =
+          `text-3xl font-bold ${emp.points >= 8 ? "text-red-600" : emp.points >= 5 ? "text-amber-600" : "text-emerald-600"}`;
+        document.getElementById("modal-progress").style.width =
+          `${Math.min(emp.points * 10, 100)}%`;
+        document.getElementById("modal-progress").className =
+          `h-2 rounded-full progress-bar ${emp.points >= 8 ? "bg-red-500" : emp.points >= 5 ? "bg-amber-500" : "bg-emerald-500"}`;
+        document.getElementById("modal-reset").textContent = emp.nextReset || 'N/A';
+        document.getElementById("modal-violations").textContent =
+          emp.history.filter(
+            (h) =>
+              new Date(h.date) >
+              new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+          ).length;
+
+        document.getElementById("modal-history").innerHTML = emp.history
+          .map(
+            (h) => `
+                <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                    <div class="flex items-center gap-3">
+                        <div class="bg-red-100 p-2 rounded-lg">
+                            <i data-lucide="alert-circle" class="w-4 h-4 text-red-600"></i>
+                        </div>
+                        <div>
+                            <p class="font-medium text-slate-800">${h.type}</p>
+                            <p class="text-sm text-slate-500">${h.date}</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <p class="font-bold ${h.points >= 0 ? 'text-red-600' : 'text-emerald-600'}">${h.points >= 0 ? '+' : ''}${h.points}</p>
+                        <p class="text-xs text-slate-400">${h.status}</p>
+                    </div>
+                </div>
+            `,
+          )
+          .join("");
+
+        document.getElementById("employee-modal").classList.remove("hidden");
+        if (typeof lucide !== "undefined" && lucide.createIcons) {
+          lucide.createIcons();
+        }
+      }
+
+      async function applyOverride() {
+        if (!state.currentEmployee) return;
+
+        const type = document.getElementById("override-type").value;
+        const amount =
+          parseFloat(document.getElementById("override-amount").value) || 0;
+        const reason = document.getElementById("override-reason").value;
+
+        try {
+          const res = await fetch(`${API_BASE}/employees/${state.currentEmployee.id}/override`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type, amount, reason }),
+          });
+          if (!res.ok) throw new Error(await res.text());
+          const updated = await res.json();
+
+          // Sync local state
+          const emp = state.employees.find(e => e.id === updated.id);
+          if (emp) {
+            emp.points = updated.points;
+            emp.history = (updated.point_history || []).map(h => ({
+              date: h.date, type: h.type, points: h.points, status: h.status, reason: h.reason,
+            }));
+          }
+
+          showToast('Override applied successfully');
+          openEmployeeModal(state.currentEmployee.id);
+          updateStats();
+          renderEmployees();
+        } catch (err) {
+          showToast('Override failed — see console');
+          console.error(err);
+        }
+
+        // Clear form
+        document.getElementById("override-amount").value = "";
+        document.getElementById("override-reason").value = "";
+      }
+
+      function openAddEmployeeModal() {
+        // Populate organization and region dropdowns
+        const orgSelect = document.getElementById("emp-org");
+        const regionSelect = document.getElementById("emp-region");
+        const policySelect = document.getElementById("emp-policy");
+
+        if (orgSelect) {
+          orgSelect.innerHTML = state.organizations
+            .map((org) => `<option value="${org.id}">${org.name}</option>`)
+            .join("");
+        }
+
+        if (regionSelect) {
+          regionSelect.innerHTML = state.regions
+            .map((r) => `<option value="${r.id}">${r.name}</option>`)
+            .join("");
+        }
+
+        if (policySelect) {
+          const allPolicies = state.organizations.flatMap((o) => o.policies);
+          policySelect.innerHTML =
+            '<option value="">Default Policy</option>' +
+            allPolicies
+              .map((p) => `<option value="${p.id}">${p.name}</option>`)
+              .join("");
+        }
+
+        // Add event listener to update regions when org changes
+        if (orgSelect) {
+          orgSelect.onchange = () => {
+            const selectedOrg = state.organizations.find(
+              (o) => o.id === orgSelect.value,
+            );
+            if (selectedOrg && regionSelect) {
+              const orgRegions = state.regions.filter((r) =>
+                selectedOrg.regionIds.includes(r.id),
+              );
+              regionSelect.innerHTML = orgRegions
+                .map((r) => `<option value="${r.id}">${r.name}</option>`)
+                .join("");
+
+              // Update policy options
+              if (policySelect) {
+                policySelect.innerHTML =
+                  '<option value="">Select Policy</option>' +
+                  selectedOrg.policies
+                    .map(
+                      (p) =>
+                        `<option value="${p.id}">${p.name} (${getRegionName(p.regionId)})</option>`,
+                    )
+                    .join("");
+              }
+            }
+          };
+        }
+
+        document
+          .getElementById("add-employee-modal")
+          .classList.remove("hidden");
+      }
+
+      function updateRegionAndPolicyOptions() {
+        const orgId = document.getElementById("emp-org")?.value;
+        const org = state.organizations.find((o) => o.id === orgId);
+
+        if (org) {
+          const regionSelect = document.getElementById("emp-region");
+          const policySelect = document.getElementById("emp-policy");
+
+          if (regionSelect) {
+            const orgRegions = state.regions.filter((r) =>
+              org.regionIds.includes(r.id),
+            );
+            regionSelect.innerHTML = orgRegions
+              .map((r) => `<option value="${r.id}">${r.name}</option>`)
+              .join("");
+          }
+
+          if (policySelect) {
+            policySelect.innerHTML =
+              '<option value="">Select Policy</option>' +
+              org.policies
+                .map((p) => `<option value="${p.id}">${p.name}</option>`)
+                .join("");
+          }
+        }
+      }
+
+      function saveEmployee() {
+        const orgId = document.getElementById("emp-org")?.value;
+        const regionId = document.getElementById("emp-region")?.value;
+        const policyId = document.getElementById("emp-policy")?.value;
+
+        const emp = {
+          id: Date.now(),
+          firstName: document.getElementById("emp-first").value,
+          lastName: document.getElementById("emp-last").value,
+          email: document.getElementById("emp-email").value,
+          department: document.getElementById("emp-dept").value,
+          position: document.getElementById("emp-position").value,
+          startDate: document.getElementById("emp-start").value,
+          points: 0,
+          trend: "stable",
+          history: [],
+          nextReset: new Date(
+            Date.now() + 180 * 24 * 60 * 60 * 1000,
+          ).toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          }),
+          organizationId: orgId || state.organizations[0]?.id,
+          regionId: regionId || state.regions[0]?.id,
+          policyId: policyId || null,
+        };
+
+        state.employees.push(emp);
+        updateStats();
+        renderEmployees();
+        closeModal("add-employee-modal");
+        showToast("Employee added successfully");
+
+        // Clear form
+        document.getElementById("emp-first").value = "";
+        document.getElementById("emp-last").value = "";
+        document.getElementById("emp-email").value = "";
+        document.getElementById("emp-position").value = "";
+        document.getElementById("emp-start").value = "";
+      }
+
+      // Utilities
+      function closeModal(modalId) {
+        document.getElementById(modalId).classList.add("hidden");
+      }
+
+      function showToast(message) {
+        const toast = document.getElementById("toast");
+        document.getElementById("toast-message").textContent = message;
+        toast.classList.remove("hidden");
+        setTimeout(() => toast.classList.add("hidden"), 3000);
+      }
+
+      function showNotifications() {
+        showToast("3 new notifications");
+      }
+
+      // Close modals on outside click
+      document.querySelectorAll(".modal-overlay").forEach((modal) => {
+        modal.addEventListener("click", (e) => {
+          if (e.target === modal) modal.classList.add("hidden");
+        });
+      });
+    </script>
+    <script src="https://deepsite.hf.co/deepsite-badge.js"></script>
+  </body>
+</html>

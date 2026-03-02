@@ -5,30 +5,39 @@ FastAPI application entry point.
 
 Endpoints:
     GET  /health          — liveness probe
+    GET  /                — serve the FPI SPA (static HTML)
     POST /chat            — session-based chatbot
     POST /quotes/draft    — quote drafting stub
+
+    /api/v1/regions       — Region CRUD
+    /api/v1/organizations — Organization CRUD
+    /api/v1/policies      — Policy CRUD
+    /api/v1/rules         — Rule CRUD + toggle
+    /api/v1/employees     — Employee CRUD + override
+    /api/v1/attendance    — CSV upload + log listing
+    /api/v1/alerts        — Alert listing
+    /api/v1/dashboard     — Stats aggregation
 
 Middleware:
     CORS: permissive by default (allow_origins=["*"])
     TODO (production): restrict allow_origins to known client domains.
-
-React Native clients:
-    Physical device:   http://<LAN_IP>:8000
-    Android emulator:  http://10.0.2.2:8000
-    iOS simulator:     http://localhost:8000
 """
 
 from __future__ import annotations
 
 import traceback
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app import logging as app_logging
 from app.chains import run_chain
+from app.database import engine, get_db, SessionLocal
+from app import models
 from app.llm import get_llm
 from app.memory import session_memory
 from app.quotes import draft_quotes
@@ -42,6 +51,18 @@ from app.schemas import (
 )
 from app.logging import generate_trace_id, log_request, log_response, log_error
 
+# Routers
+from app.routers import (
+    regions,
+    organizations,
+    policies,
+    rules,
+    employees,
+    attendance,
+    alerts,
+    dashboard,
+)
+
 logger = app_logging.logger
 
 # ---------------------------------------------------------------------------
@@ -49,10 +70,23 @@ logger = app_logging.logger
 # ---------------------------------------------------------------------------
 _llm = None
 
+STATIC_DIR = Path(__file__).parent / "static"
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _llm
+    logger.info("startup: creating database tables")
+    models.Base.metadata.create_all(bind=engine)
+
+    logger.info("startup: seeding database")
+    from app.seed import seed
+    db = SessionLocal()
+    try:
+        seed(db)
+    finally:
+        db.close()
+
     logger.info("startup: initialising LLM provider")
     _llm = get_llm()
     logger.info("startup: complete")
@@ -65,16 +99,14 @@ async def lifespan(app: FastAPI):
 # ---------------------------------------------------------------------------
 
 app = FastAPI(
-    title="Fair Play Initiative — Chatbot API",
-    description="FastAPI backend for the Fair Play Initiative chatbot.",
-    version="0.1.0",
+    title="Fair Play Initiative — API",
+    description="FastAPI backend for the Fair Play Initiative attendance management platform.",
+    version="0.2.0",
     lifespan=lifespan,
 )
 
 # ---------------------------------------------------------------------------
 # CORS middleware
-# TODO (production): replace allow_origins=["*"] with an explicit allowlist,
-#   e.g. ["https://yourapp.example.com", "exp://192.168.1.x:19000"]
 # ---------------------------------------------------------------------------
 app.add_middleware(
     CORSMiddleware,
@@ -83,6 +115,27 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ---------------------------------------------------------------------------
+# Static files (SPA)
+# ---------------------------------------------------------------------------
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+# ---------------------------------------------------------------------------
+# FPI REST API routers
+# ---------------------------------------------------------------------------
+API_PREFIX = "/api/v1"
+
+app.include_router(regions.router, prefix=API_PREFIX)
+app.include_router(organizations.router, prefix=API_PREFIX)
+app.include_router(policies.router, prefix=API_PREFIX)
+app.include_router(rules.router, prefix=API_PREFIX)
+app.include_router(employees.router, prefix=API_PREFIX)
+app.include_router(attendance.router, prefix=API_PREFIX)
+app.include_router(alerts.router, prefix=API_PREFIX)
+app.include_router(dashboard.router, prefix=API_PREFIX)
 
 
 # ---------------------------------------------------------------------------
@@ -104,8 +157,20 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 
 
 # ---------------------------------------------------------------------------
-# Routes
+# Core routes
 # ---------------------------------------------------------------------------
+
+@app.get("/", include_in_schema=False)
+async def serve_spa():
+    """Serve the FPI SPA index.html if present, otherwise return a redirect hint."""
+    index = STATIC_DIR / "index.html"
+    if index.exists():
+        return FileResponse(index)
+    return JSONResponse(
+        {"message": "FPI API is running. Place index.html in app/static/ to serve the SPA."},
+        status_code=200,
+    )
+
 
 @app.get("/health", response_model=HealthResponse, tags=["infra"])
 async def health() -> HealthResponse:

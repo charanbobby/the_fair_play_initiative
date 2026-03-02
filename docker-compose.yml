@@ -1,0 +1,21 @@
+services:
+  api:
+    build: .
+    image: fair-play-backend
+    ports:
+      - "7860:7860"
+    volumes:
+      # Persist the SQLite database across container restarts
+      - db_data:/home/appuser/app/data
+    environment:
+      DATABASE_URL: sqlite:///./data/fpi.db
+      LLM_PROVIDER: mock
+      APP_HOST: 0.0.0.0
+      APP_PORT: "7860"
+      # Uncomment and set these to use a real LLM:
+      # LLM_PROVIDER: openai
+      # OPENAI_API_KEY: sk-...
+    restart: unless-stopped
+
+volumes:
+  db_data:
