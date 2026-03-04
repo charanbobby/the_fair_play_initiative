@@ -1,6 +1,23 @@
+# ── Core Jupyter ──────────────────────────────────────────────────────────────
 jupyter>=1.0.0
-litellm>=1.34.41
-instructor>=1.2.6
-pydantic>=2.6.4
+ipywidgets>=8.0.0
+
+# ── PDF + Utilities ───────────────────────────────────────────────────────────
 pymupdf>=1.24.0
 python-dotenv>=1.0.1
+pydantic>=2.6.4
+
+# ── AI Platform: LangChain + LangGraph ───────────────────────────────────────
+langchain>=0.3.0
+langchain-core>=0.3.0
+langchain-openai>=0.2.0
+langgraph>=0.2.0
+
+# ── Superseded (litellm + instructor) ─────────────────────────────────────────
+# litellm>=1.34.41
+# instructor>=1.2.6
+
+# ── Observability: Arize AX ───────────────────────────────────────────────────
+opentelemetry-sdk>=1.39.0
+arize-otel>=0.11.0
+openinference-instrumentation-langchain>=0.1.58

@@ -1,0 +1,134 @@
+-- ============================================================
+-- Fair Play Initiative — PostgreSQL Schema
+-- Target: Supabase (PostgreSQL)
+-- Run order matters: each table only references tables above it.
+-- ============================================================
+
+-- ============================================================
+-- 1. Region
+-- ============================================================
+CREATE TABLE IF NOT EXISTS region (
+    id          TEXT PRIMARY KEY,          -- slug e.g. 'us-west'
+    name        TEXT        NOT NULL,
+    code        TEXT        NOT NULL,      -- e.g. 'US-W'
+    timezone    TEXT        NOT NULL,      -- IANA e.g. 'America/Los_Angeles'
+    labor_laws  TEXT
+);
+
+-- ============================================================
+-- 2. Organization
+-- ============================================================
+CREATE TABLE IF NOT EXISTS organization (
+    id      TEXT    PRIMARY KEY,           -- slug e.g. 'org-1'
+    name    TEXT    NOT NULL,
+    code    TEXT    NOT NULL,
+    active  BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+-- ============================================================
+-- 3. OrganizationRegion  (M2M join — no extra columns)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS organization_region (
+    organization_id TEXT NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+    region_id       TEXT NOT NULL REFERENCES region(id)       ON DELETE CASCADE,
+    PRIMARY KEY (organization_id, region_id)
+);
+
+-- ============================================================
+-- 4. Policy
+-- ============================================================
+CREATE TABLE IF NOT EXISTS policy (
+    id              TEXT    PRIMARY KEY,
+    name            TEXT    NOT NULL,
+    organization_id TEXT    NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+    region_id       TEXT    NOT NULL REFERENCES region(id)       ON DELETE CASCADE,
+    active          BOOLEAN NOT NULL DEFAULT TRUE,
+    effective_date  DATE
+);
+
+-- ============================================================
+-- 5. Rule
+-- ============================================================
+CREATE TABLE IF NOT EXISTS rule (
+    id          SERIAL  PRIMARY KEY,
+    policy_id   TEXT    REFERENCES policy(id) ON DELETE CASCADE,  -- NULL = global rule
+    name        TEXT    NOT NULL,
+    condition   TEXT    NOT NULL,    -- 'late' | 'early' | 'absence' | 'no-call'
+    threshold   INTEGER NOT NULL DEFAULT 0,  -- minutes; 0 = any deviation
+    points      REAL    NOT NULL DEFAULT 0,
+    description TEXT,
+    active      BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+-- ============================================================
+-- 6. Employee
+-- ============================================================
+CREATE TABLE IF NOT EXISTS employee (
+    id              SERIAL  PRIMARY KEY,
+    first_name      TEXT    NOT NULL,
+    last_name       TEXT    NOT NULL,
+    email           TEXT    NOT NULL UNIQUE,
+    department      TEXT,
+    position        TEXT,
+    start_date      DATE,
+    points          REAL    NOT NULL DEFAULT 0,
+    trend           TEXT    NOT NULL DEFAULT 'stable',  -- 'up' | 'down' | 'stable'
+    next_reset      DATE,
+    organization_id TEXT    NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+    region_id       TEXT    NOT NULL REFERENCES region(id)       ON DELETE CASCADE,
+    policy_id       TEXT             REFERENCES policy(id)       ON DELETE SET NULL
+);
+
+-- ============================================================
+-- 7. PointHistory  (immutable ledger)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS point_history (
+    id          SERIAL  PRIMARY KEY,
+    employee_id INTEGER NOT NULL REFERENCES employee(id) ON DELETE CASCADE,
+    date        DATE    NOT NULL,
+    type        TEXT    NOT NULL,   -- violation name OR 'Manual Override: excuse' etc.
+    points      REAL    NOT NULL,   -- positive = penalty; negative = deduction
+    status      TEXT    NOT NULL DEFAULT 'Active',  -- 'Active' | 'Excused' | 'Approved'
+    reason      TEXT                                -- filled for manual overrides
+);
+
+-- ============================================================
+-- 8. AttendanceLog
+-- ============================================================
+CREATE TABLE IF NOT EXISTS attendance_log (
+    id              SERIAL  PRIMARY KEY,
+    employee_id     INTEGER NOT NULL REFERENCES employee(id)     ON DELETE CASCADE,
+    organization_id TEXT    NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+    region_id       TEXT    NOT NULL REFERENCES region(id)       ON DELETE CASCADE,
+    policy_id       TEXT             REFERENCES policy(id)       ON DELETE SET NULL,
+    date            DATE    NOT NULL,
+    scheduled_in    TEXT,            -- '09:00 AM' format
+    scheduled_out   TEXT,
+    actual_in       TEXT,            -- empty string = absent / not recorded
+    actual_out      TEXT,
+    violation       TEXT,            -- rule name if violated; NULL if compliant
+    points          REAL    NOT NULL DEFAULT 0,
+    status          TEXT    NOT NULL DEFAULT 'Compliant'  -- 'Compliant' | 'Violation' | 'Active'
+);
+
+-- ============================================================
+-- 9. Alert
+-- ============================================================
+CREATE TABLE IF NOT EXISTS alert (
+    id              SERIAL       PRIMARY KEY,
+    organization_id TEXT         REFERENCES organization(id) ON DELETE CASCADE,  -- NULL = platform-wide
+    type            TEXT         NOT NULL,   -- 'info' | 'warning' | 'danger' | 'success'
+    message         TEXT         NOT NULL,
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+-- ============================================================
+-- Indexes
+-- ============================================================
+CREATE INDEX IF NOT EXISTS idx_employee_org       ON employee(organization_id);
+CREATE INDEX IF NOT EXISTS idx_employee_region    ON employee(region_id);
+CREATE INDEX IF NOT EXISTS idx_rule_policy        ON rule(policy_id);
+CREATE INDEX IF NOT EXISTS idx_point_history_emp  ON point_history(employee_id);
+CREATE INDEX IF NOT EXISTS idx_attendance_emp     ON attendance_log(employee_id);
+CREATE INDEX IF NOT EXISTS idx_attendance_org     ON attendance_log(organization_id);
+CREATE INDEX IF NOT EXISTS idx_alert_org          ON alert(organization_id);
