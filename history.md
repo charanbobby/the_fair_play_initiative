@@ -297,6 +297,61 @@ Latency is high (~59s) — expected for a first run; the plan step has a large s
 
 ---
 
+## Session 10 — Mar 5, 2026
+
+### Step 3c — SQL generation refinements
+
+Upgraded the SQL generation step (Step 3c) from a minimal stub to a fully structured, externally-prompted pipeline stage with proper multi-statement execution and post-INSERT verification.
+
+#### New file: `experiments/SQLGenPrompt.md`
+
+Externalized the SQL generation system prompt (previously hardcoded in cell `ppsjy4cxjvj`). Follows the same `{{schema}}` placeholder pattern as `SystemPrompt.md` and the plan prompt (`02_sql_query_plan.md`). Also saved a copy at `app/prompts/03_sql_generation.md` for the backend.
+
+Key prompt sections: hard constraints (no SELECT/UPDATE/DELETE, no transactional tables), INSERT order (FK chain), ID chaining rules, per-rule-row generation spec, value quality guidelines, confidence scoring rubric.
+
+#### `SQLGeneration` model expanded (cell `vcei3qawk69`)
+
+Old model had 2 fields (`sql_query`, `confidence_score`). New model has 6:
+
+| Field | Type | Purpose |
+| ----- | ---- | ------- |
+| `sql_query` | `str` | Raw executable SQL block |
+| `tables_affected` | `list[str]` | Ordered list of tables receiving INSERTs |
+| `statement_count` | `int` | Total INSERT count |
+| `rule_count` | `int` | Rule INSERTs specifically (subset) |
+| `id_chain` | `dict[str, str]` | Slug IDs used across statements (for FK tracing) |
+| `confidence_score` | `float` | 0.0–1.0 with deduction rubric |
+
+#### Step 3c cell updated (cell `ppsjy4cxjvj`)
+
+- Prompt loaded from `SQLGenPrompt.md` file instead of inline string
+- `_format_plan_for_sql_prompt()` improved: FK chain now shows `left.FK → right.PK`, existence checks include `source_keyword`
+- Output prints all new metadata fields (`statement_count`, `rule_count`, `tables_affected`, `id_chain`)
+
+#### SQL validation cell rewritten (cell `9fef6d78`)
+
+- `cursor.execute()` → `cursor.executescript()` to handle multi-statement INSERT blocks
+- Added `organization_regions` junction table to the in-memory schema (was missing)
+- Changed `rules.id` from `INTEGER AUTOINCREMENT` → `TEXT PRIMARY KEY` (matches slug ID convention)
+- Added post-INSERT verification: row-count table for all 5 config tables + rule detail breakdown (id, points, threshold)
+
+#### LangGraph `node_execute` updated (cell `uohs84lvr9`)
+
+- `cur.execute()` → `cur.executescript()` for multi-statement SQL
+- Returns `dict` of row counts per config table instead of empty row list
+- `FPIState.query_results` type changed from `list[dict]` → `dict`
+
+#### Cells modified
+
+| Cell ID | Change |
+| ------- | ------ |
+| `vcei3qawk69` | REPLACE — expanded `SQLGeneration` model (2 → 6 fields) |
+| `ppsjy4cxjvj` | REPLACE — load prompt from file, improved plan formatter, richer output |
+| `9fef6d78` | REPLACE — `executescript()`, added junction table, TEXT rule IDs, row-count verification |
+| `uohs84lvr9` | REPLACE — `node_execute` uses `executescript()`, returns row counts |
+
+---
+
 ## Session 5 — Mar 4, 2026
 
 ### Bug fix: missing `_format_keywords` + readable plan format
@@ -333,3 +388,79 @@ WHERE:
 
 - Sections are conditionally included (skipped when empty)
 - Cell modified: `ppsjy4cxjvj`
+
+---
+
+## Session 11 — Mar 5, 2026
+
+### RAG optimisation — ChromaDB vector retrieval to replace brute-force truncation
+
+#### Problem
+
+The current pipeline (`01_pdf_to_db_query.ipynb`) takes **316.7s** with **36k tokens** (gpt-5-mini, ~$0.0008). Both `node_extract` and `node_plan` receive blindly truncated text (`pdf_text[:4000]` and `pdf_text[:2000]`), wasting tokens on irrelevant sections while potentially missing critical policy details beyond the truncation boundary.
+
+#### Solution: Retrieval-Augmented Generation (RAG)
+
+Created `experiments/02_rag_pipeline.ipynb` — a new experiment notebook that introduces a ChromaDB-based RAG retrieval step before the LLM nodes.
+
+**Reference implementation:** `D:\Python Applications\problem_first_ai\Perplexia\perplexia_ai\week2\part2.py` (DocumentRAGChat using ChromaDB + OpenAIEmbeddings via OpenRouter).
+
+#### Architecture
+
+**Old graph:** `START → node_extract → node_plan → END`
+**New graph:** `START → node_retrieve → node_extract → node_plan → END`
+
+**New state field:**
+- `rag_context: str | None` — concatenated relevant chunks retrieved from ChromaDB
+
+**New node: `node_retrieve`**
+1. Chunks full PDF text with `RecursiveCharacterTextSplitter` (800 chars, 200 overlap)
+2. Embeds chunks into ephemeral ChromaDB collection (in-memory, no persistence)
+3. Runs 5 schema-aware similarity queries (k=8 each), deduplicates results
+4. Joins unique retrieved chunks with `---` separators into `rag_context`
+
+**Schema-aware retrieval queries:**
+
+| Query | Target entities |
+| ----- | --------------- |
+| `attendance policy rules violations points thresholds escalation corrective action` | rule, policy |
+| `organization company employer region location jurisdiction labor laws` | organization, region |
+| `policy name effective date scope accrual model rolling window` | policy metadata |
+| `excused unexcused absence tardy no-call no-show early departure` | attendance_log, rule |
+| `perfect attendance reduction milestone FMLA ADA PTO leave approved` | point_history, rule |
+
+**Modified nodes:**
+- `node_extract`: uses `state["rag_context"]` instead of `state["pdf_text"][:4000]`; falls back to truncation if RAG context is missing
+- `node_plan`: uses `state["rag_context"]` instead of `state["pdf_text"][:2000]`; same fallback
+
+#### Chunking strategy
+
+| Parameter | Value | Rationale |
+| --------- | ----- | --------- |
+| `chunk_size` | 800 | Large enough to preserve paragraph context; small enough for precise retrieval |
+| `chunk_overlap` | 200 | Prevents losing information at chunk boundaries |
+| `separators` | `\n\n`, `\n`, `. `, ` `, `` | Prioritises paragraph → sentence → word boundaries |
+
+#### Embedding model
+
+- `text-embedding-3-small` via OpenRouter (same provider as LLM)
+- Uses `OpenAIEmbeddings` from `langchain-openai`
+
+#### Dependencies added
+
+- `langchain-chroma>=0.2.0` — ChromaDB integration for LangChain
+- `langchain-text-splitters>=0.3.0` — text chunking utilities
+- Added to `experiments/requirements-experiments.txt`; `langchain-chroma==1.1.0` already exists in root `requirements.txt`
+
+#### Expected improvements
+
+- **Token reduction:** RAG context should be significantly smaller than 4000-char truncation while covering more relevant content
+- **Speed:** fewer input tokens → faster LLM inference
+- **Quality:** retrieval targets specific schema entities instead of hoping the first N chars contain everything
+
+#### Files created/modified
+
+| File | Change |
+| ---- | ------ |
+| `experiments/02_rag_pipeline.ipynb` | NEW — full RAG experiment notebook (observability, chunking, embedding, retrieval, extraction, plan, LangGraph agent, performance comparison) |
+| `experiments/requirements-experiments.txt` | EDIT — added `langchain-chroma>=0.2.0` and `langchain-text-splitters>=0.3.0` |
