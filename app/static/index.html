@@ -402,7 +402,7 @@
           </div>
 
           <!-- Analysis Results -->
-          <div id="analysis-results" class="mt-8 hidden">
+          <div id="analysis-results" class="mt-8 hidden overflow-hidden">
             <div class="flex items-center justify-between mb-6">
               <h4 class="text-md font-semibold text-slate-800 flex items-center gap-2">
                 <i data-lucide="sparkles" class="w-5 h-5 text-indigo-500"></i>
@@ -434,7 +434,7 @@
               <h5 class="text-sm font-semibold text-slate-600 uppercase tracking-wide mb-3">
                 SQL Ingestion Plan
               </h5>
-              <div id="plan-section">
+              <div id="plan-section" class="min-w-0">
                 <!-- Populated by JS -->
               </div>
             </div>
@@ -2182,7 +2182,7 @@
                 <span class="text-xs text-slate-500">${f.description}</span>
                 ${f.source_keyword ? `<span class="text-xs text-slate-400 shrink-0">← ${f.source_keyword}</span>` : ""}
               </div>
-              <code class="text-xs text-amber-700 break-all leading-relaxed">${f.expression}</code>
+              <div class="text-xs text-amber-700 font-mono break-all leading-relaxed">${f.expression}</div>
             </div>`;
           });
           planHTML += `</div></div>`;
