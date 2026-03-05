@@ -18,12 +18,12 @@ from app.schemas import RegionCreate, RegionResponse, RegionUpdate
 router = APIRouter(prefix="/regions", tags=["regions"])
 
 
-@router.get("/", response_model=List[RegionResponse])
+@router.get("", response_model=List[RegionResponse])
 def list_regions(db: Session = Depends(get_db)):
     return db.query(models.Region).all()
 
 
-@router.post("/", response_model=RegionResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=RegionResponse, status_code=status.HTTP_201_CREATED)
 def create_region(body: RegionCreate, db: Session = Depends(get_db)):
     if db.get(models.Region, body.id):
         raise HTTPException(status_code=400, detail=f"Region '{body.id}' already exists")

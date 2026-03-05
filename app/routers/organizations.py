@@ -32,7 +32,7 @@ def _to_response(org: models.Organization) -> OrganizationResponse:
     )
 
 
-@router.get("/", response_model=List[OrganizationResponse])
+@router.get("", response_model=List[OrganizationResponse])
 def list_organizations(
     active_only: Optional[bool] = None,
     db: Session = Depends(get_db),
@@ -43,7 +43,7 @@ def list_organizations(
     return [_to_response(o) for o in q.all()]
 
 
-@router.post("/", response_model=OrganizationResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=OrganizationResponse, status_code=status.HTTP_201_CREATED)
 def create_organization(body: OrganizationCreate, db: Session = Depends(get_db)):
     if db.get(models.Organization, body.id):
         raise HTTPException(status_code=400, detail=f"Organization '{body.id}' already exists")

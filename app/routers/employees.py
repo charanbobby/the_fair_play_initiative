@@ -26,7 +26,7 @@ from app.schemas import (
 router = APIRouter(prefix="/employees", tags=["employees"])
 
 
-@router.get("/", response_model=List[EmployeeResponse])
+@router.get("", response_model=List[EmployeeResponse])
 def list_employees(
     organization_id: Optional[str] = None,
     region_id: Optional[str] = None,
@@ -49,7 +49,7 @@ def list_employees(
     return q.all()
 
 
-@router.post("/", response_model=EmployeeResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=EmployeeResponse, status_code=status.HTTP_201_CREATED)
 def create_employee(body: EmployeeCreate, db: Session = Depends(get_db)):
     existing = db.query(models.Employee).filter(models.Employee.email == body.email).first()
     if existing:

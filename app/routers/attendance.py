@@ -24,7 +24,7 @@ from app.schemas import AttendanceLogResponse
 router = APIRouter(prefix="/attendance", tags=["attendance"])
 
 
-@router.get("/", response_model=List[AttendanceLogResponse])
+@router.get("", response_model=List[AttendanceLogResponse])
 def list_attendance(
     organization_id: Optional[str] = None,
     region_id: Optional[str] = None,

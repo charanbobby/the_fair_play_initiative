@@ -18,7 +18,7 @@ from app.schemas import RuleCreate, RuleResponse, RuleUpdate
 router = APIRouter(prefix="/rules", tags=["rules"])
 
 
-@router.get("/", response_model=List[RuleResponse])
+@router.get("", response_model=List[RuleResponse])
 def list_rules(
     policy_id: Optional[str] = None,
     active_only: Optional[bool] = None,
@@ -32,7 +32,7 @@ def list_rules(
     return q.all()
 
 
-@router.post("/", response_model=RuleResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=RuleResponse, status_code=status.HTTP_201_CREATED)
 def create_rule(body: RuleCreate, db: Session = Depends(get_db)):
     rule = models.Rule(**body.model_dump())
     db.add(rule)

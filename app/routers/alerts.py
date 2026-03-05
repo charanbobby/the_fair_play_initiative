@@ -18,7 +18,7 @@ from app.schemas import AlertCreate, AlertResponse
 router = APIRouter(prefix="/alerts", tags=["alerts"])
 
 
-@router.get("/", response_model=List[AlertResponse])
+@router.get("", response_model=List[AlertResponse])
 def list_alerts(
     organization_id: Optional[str] = None,
     limit: int = 20,
@@ -33,7 +33,7 @@ def list_alerts(
     return q.limit(limit).all()
 
 
-@router.post("/", response_model=AlertResponse, status_code=201)
+@router.post("", response_model=AlertResponse, status_code=201)
 def create_alert(body: AlertCreate, db: Session = Depends(get_db)):
     alert = models.Alert(**body.model_dump())
     db.add(alert)

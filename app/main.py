@@ -103,6 +103,7 @@ app = FastAPI(
     description="FastAPI backend for the Fair Play Initiative attendance management platform.",
     version="0.2.0",
     lifespan=lifespan,
+    redirect_slashes=False,
 )
 
 # ---------------------------------------------------------------------------

@@ -22,7 +22,7 @@ from app.schemas import PolicyCreate, PolicyResponse, PolicyUpdate, PolicyAnalys
 router = APIRouter(prefix="/policies", tags=["policies"])
 
 
-@router.get("/", response_model=List[PolicyResponse])
+@router.get("", response_model=List[PolicyResponse])
 def list_policies(
     organization_id: Optional[str] = None,
     region_id: Optional[str] = None,
@@ -36,7 +36,7 @@ def list_policies(
     return q.all()
 
 
-@router.post("/", response_model=PolicyResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=PolicyResponse, status_code=status.HTTP_201_CREATED)
 def create_policy(body: PolicyCreate, db: Session = Depends(get_db)):
     if db.get(models.Policy, body.id):
         raise HTTPException(status_code=400, detail=f"Policy '{body.id}' already exists")
