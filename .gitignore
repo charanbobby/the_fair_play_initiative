@@ -35,3 +35,9 @@ yarn-error.log*
 .vercel
 
 input_files/
+
+# jupyter
+.ipynb_checkpoints/
+
+# windows artifacts
+nul

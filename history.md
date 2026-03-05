@@ -464,3 +464,189 @@ Created `experiments/02_rag_pipeline.ipynb` — a new experiment notebook that i
 | ---- | ------ |
 | `experiments/02_rag_pipeline.ipynb` | NEW — full RAG experiment notebook (observability, chunking, embedding, retrieval, extraction, plan, LangGraph agent, performance comparison) |
 | `experiments/requirements-experiments.txt` | EDIT — added `langchain-chroma>=0.2.0` and `langchain-text-splitters>=0.3.0` |
+
+#### Actual results (ran the notebook)
+
+| Metric | Baseline (01) | RAG (02) | Delta |
+| ------ | ------------- | -------- | ----- |
+| Latency | 316.7s | 584.8s | 1.8x slower |
+| Tokens | 36,000 | 64,656 | +80% more |
+| Chunks retrieved | n/a | 20 of 26 | 97.3% of document |
+
+**Conclusion: RAG does not help this use case.** The pipeline performs *exhaustive structured extraction* — it needs every rule, threshold, leave type, and escalation level from the policy. RAG retrieved 97.3% of the document anyway, so the embedding + retrieval step added pure overhead with no token savings.
+
+#### When RAG would add value in FPI
+
+- **Cross-policy querying** (50+ ingested policies) — retrieve relevant chunks from the right policy instead of feeding all documents
+- **Runtime Q&A** ("what happens after 9 points?") — pull the right section from the right policy for a user question
+- **Documents exceeding LLM context window** (128K+) — can't fit everything in one prompt, RAG is mandatory
+
+**Key insight:** For single-document exhaustive extraction, pass the full text. RAG adds value when you have more content than fits in context and only need a subset to answer a question.
+
+---
+
+## Session 12 — Mar 5, 2026
+
+### Code audit: duplicate PDF upload safety
+
+**Question:** What happens if the same policy PDF is uploaded/analyzed a second time?
+
+**Finding:** The analysis pipeline is completely stateless and read-only.
+
+1. `POST /api/v1/policies/analyze` (`app/routers/policies.py:79-105`) — accepts multipart upload, extracts text, runs the 2-node LangGraph (`node_extract → node_plan`), returns `PolicyAnalysisResponse`. Zero database interaction.
+2. `analyze_policy_document()` (`app/services/policy_analyzer.py`) — both nodes are LLM calls only. No INSERT, no UPDATE, no SQL execution.
+3. Separate `POST /api/v1/policies` (`app/routers/policies.py:39-47`) — this manual endpoint *does* write to the DB and checks for duplicate IDs before inserting.
+4. No unique constraints in `db/schema.sql` on the `policy` table beyond the primary key `id`.
+
+**Conclusion:** Uploading the same PDF multiple times to `/analyze` is harmless — just burns LLM tokens and returns identical JSON. No rows created, no state changes. When automatic ingestion is wired up (plan → actual INSERTs), the pipeline will need `INSERT OR REPLACE` on `policy` and `INSERT OR IGNORE` on `organization`/`region` for idempotency.
+
+---
+
+## Session 13 — Mar 5, 2026
+
+### Critique: extracted rules vs. PDF source (Acme Manufacturing HR-ATT-2024-001)
+
+Compared the 50 rules inserted into the in-memory SQLite `rule` table against the actual policy PDF content. The pipeline successfully inserted 54 rows (1 org, 1 region, 1 junction, 1 policy, 50 rules) but the **rule quality has significant issues**.
+
+#### What's correct
+
+The core point values from Section 5.1 and 5.2 are accurately extracted:
+
+| Rule | Extracted pts | PDF pts | Verdict |
+| ---- | ------------- | ------- | ------- |
+| ncns-first-day | +3.0 | 3.0 | Correct |
+| ncns-each-consecutive-day | +3.0 | 3.0 | Correct |
+| unexcused-full-day-absence | +1.5 | 1.5 | Correct |
+| unexcused-half-day-absence | +1.0 | 1.0 | Correct |
+| tardy-major | +1.0 | 1.0 | Correct |
+| tardy-minor | +0.5 | 0.5 | Correct |
+| early-departure-unauthorized | +1.0 | 1.0 | Correct |
+| absence-on-holiday-critical-day | +2.0 | 2.0 | Correct |
+| perfect-attendance-30-days | -0.5 | -0.5 | Correct |
+| perfect-attendance-60-days | -1.0 | -1.0 | Correct |
+| perfect-attendance-90-days | -1.5 | -1.5 | Correct |
+| perfect-attendance-full-year | -2.0 | -2.0 | Correct |
+
+#### Problem 1: Massive over-generation (50 rules vs. ~20 actual)
+
+The PDF defines ~12 point-generating rules (Section 5.1), 4 perfect-attendance reductions (Section 5.2), 5 corrective action levels (Section 6), and 3 immediate-termination triggers. The LLM inflated this to 50 by turning procedural text, definitions, and administrative guidance into fake "rules":
+
+| Hallucinated rule | Actually from |
+| ----------------- | ------------- |
+| `callout-procedure-rule` | Section 4.1 — a procedure, not a point rule |
+| `occurrence-definition` | Section 3 — a definition |
+| `rolling-12-month-window` | Section 3 — a definition |
+| `notify-by-times-operator-setup` | Section 4 — shift schedule table |
+| `supervisor-hris-coding-timeframe` | Section 9 — supervisor responsibility |
+| `retention-audit-parameters` | Section 9 — record keeping |
+| `documentation-deadlines-summary` | Section 7 — leave documentation |
+| `overtime-voluntary-vs-mandatory-distinction` | Section 4.2 — narrative text |
+| `temp-contract-worker-coverage` | Section 2 — scope statement |
+| `perfect-attendance-certificate-tracking` | Duplicates the 90-day reward |
+| `dispute-window-point-rebuttal` | Section 6 — employee right, not point-generating |
+| `escalation-alerts-hr-vp` | Section 6 — HR involvement column, not a rule |
+| `negative-balance-floor` | Policy constraint ("min balance is 0.0"), not a rule |
+| `minimum-balance-enforcement` | Same constraint rephrased |
+
+#### Problem 2: Corrective action levels misplaced as rules
+
+Levels 1–5 are *consequences* triggered by point thresholds, not point-generating events. They belong in the `alert` table (which exists in the schema for this purpose), not in `rule`:
+
+| Extracted rule | What it actually is |
+| -------------- | ------------------- |
+| `corrective-level-1` (pts=0.0, thr=3) | Level 1 consequence — Verbal Warning at 3.0–4.5 pts |
+| `corrective-level-2` (pts=0.0, thr=5) | Level 2 consequence — Written Warning at 5.0–6.5 pts |
+| `corrective-level-3` (pts=0.0, thr=7) | Level 3 consequence — Final Written Warning + 1-day suspension at 7.0–8.5 pts |
+| `corrective-level-4` (pts=0.0, thr=9) | Level 4 consequence — Final Written Warning + 3-day suspension at 9.0–11.5 pts |
+| `corrective-level-5` (pts=0.0, thr=12) | Level 5 consequence — Termination at 12.0+ pts |
+
+#### Problem 3: Duplicate/redundant rules
+
+- `mandatory-ot-no-show` (pts=+1.5) — Section 4.2 says "treated as unexcused absence", so this is the same as `unexcused-full-day-absence`, not a distinct rule
+- `plant-shutdown-failure-to-return` (pts=+1.5) — Section 8.2 says "1.5-point unexcused absence", same duplication
+
+#### Problem 4: Missing rules
+
+- **Union Steward / Business leave** (Section 7, 0 pts) — not extracted
+- **Inclement weather / Emergency Closure** (Section 8.3, 0 pts) — not extracted
+
+#### Problem 5: Ambiguous semantics
+
+- `third-minor-tardy-conversion` (pts=+1.0, thr=3) — PDF says "3rd minor tardy in same month = 1 full point". This is a reclassification (the 3 minor tardies get upgraded), not a flat additional point. The extracted rule is ambiguous about this.
+
+#### Summary
+
+| Category | Count |
+| -------- | ----- |
+| Correct point-generating rules | ~12 |
+| Correct perfect-attendance reductions | 4 |
+| Hallucinated / over-generated rules | ~28 |
+| Corrective actions misplaced as rules | 5 |
+| Administrative text wrongly made into rules | ~10 |
+
+#### Prompt fix needed
+
+The SQL generation / plan prompts need tighter guardrails:
+- "Only create `rule` rows for items that **generate or reduce** attendance points"
+- "Do NOT create `rule` rows for definitions, procedures, corrective action levels, or administrative responsibilities"
+- "Corrective action levels (Section 6) belong in the `alert` table, not `rule`"
+- "If a policy section says 'treated as [existing violation type]', do NOT create a separate rule — reference the existing one"
+
+---
+
+## Session 14 — Mar 5, 2026
+
+### Fix: reduce rule over-generation from 50 to ~22 expected
+
+Root cause identified: the `PLAN_SYSTEM_MSG` prompt explicitly instructed the LLM to create corrective-action trigger rules (group d), operational rule rows (rolling window, balance floor, occurrence definition), and used open-ended "and any other named in the policy" catch-alls that encouraged mining every section for rules.
+
+#### Changes made
+
+**1. `PLAN_SYSTEM_MSG` (cell `mpundg7z6lj`) — major rewrite**
+
+- Rule table description changed from "one row per violation tier / escalation rule" to "one row per point-generating violation, approved-leave exemption, or perfect-attendance reduction. NOT for corrective action levels, definitions, or procedures."
+- Reduced rule categories from 4 + operational to 3:
+  - a. Violation/occurrence rules (points > 0) — kept
+  - b. Approved-leave exemption rules (points = 0.0) — kept, capped to named leave types
+  - c. Perfect-attendance reduction rules (points < 0) — kept
+  - d. ~~Corrective-action trigger rules~~ — **removed entirely**
+  - ~~Operational rule rows~~ — **removed entirely**
+- Removed "and any other named in the policy" catch-all from groups a and b
+- Added **RULE EXCLUSIONS** block — explicit list of 8 categories that must NOT become rule rows: definitions, call-out procedures, corrective action levels, immediate termination triggers, supervisor/HR responsibilities, operational parameters, scope statements, duplicate violations
+- Added **EXPECTED RULE COUNT** guidance: "roughly 20–25 rule rows total. If your count exceeds 30, you are likely over-extracting."
+- Added union steward/business leave to the named approved-leave list (was missing)
+- Fixed `rule.threshold` description: added "unless the rule requires multiple events like third-minor-tardy = 3"
+
+**2. `experiments/SQLGenPrompt.md` — RULE EXCLUSIONS section**
+
+- Added `RULE EXCLUSIONS` section after `RULE ROWS` — mirrors the plan prompt exclusions as a second guardrail at the SQL generation stage
+- Added instruction: "If the plan includes any of these in error, SKIP them and note the skip in your confidence deduction"
+- Changed `RULE ROWS` to clarify: "Only generate rule rows that appear in the plan — do NOT invent additional rules"
+- Removed "CA-triggers" from the points description (no longer a valid category)
+- Added confidence penalty: "−0.10 if rule_count exceeds 30" and "−0.05 per rule row skipped because it matched a RULE EXCLUSION"
+
+**3. Cell `9fef6d78` — post-INSERT validation guard**
+
+Added a rule count sanity check after the rule detail printout:
+- `> 30 rules`: WARNING about likely over-generation from definitions/procedures/corrective actions
+- `< 10 rules`: WARNING about likely under-extraction of approved-leave exemptions or violation types
+- `10–30 rules`: confirmation message that count is within expected range
+
+#### Expected impact
+
+| Category | Before | After |
+| -------- | ------ | ----- |
+| Violation rules (pts > 0) | 12 correct + 2 duplicates | ~10 (deduped) |
+| Approved-leave (pts = 0) | 8 correct + ~14 hallucinated | ~9 (added union steward) |
+| Perfect-attendance (pts < 0) | 4 correct | 4 |
+| Corrective actions (misplaced) | 5 | 0 |
+| Operational/admin (hallucinated) | ~20 | 0 |
+| **Total** | **50** | **~22** |
+
+#### Files modified
+
+| File | Change |
+| ---- | ------ |
+| `experiments/01_pdf_to_db_query.ipynb` cell `mpundg7z6lj` | REPLACE — `PLAN_SYSTEM_MSG` rewritten with rule exclusions, expected count, tightened categories |
+| `experiments/01_pdf_to_db_query.ipynb` cell `9fef6d78` | EDIT — added rule count sanity check (warning if >30 or <10) |
+| `experiments/SQLGenPrompt.md` | EDIT — added RULE EXCLUSIONS section, confidence penalties, dedup instruction |
