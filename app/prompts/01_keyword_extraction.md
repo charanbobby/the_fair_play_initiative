@@ -43,16 +43,6 @@ Example:
 - Do not interpret beyond simplification; distill only what is present and necessary for direct mapping.
 - Adhere to the structured JSON output format.
 
-# Confidence Scoring
-
-Set confidence_score between 0.0 and 1.0. Start at 1.0 and deduct:
-  - −0.10 if the document appears truncated or incomplete
-  - −0.05 per schema table where you found zero keywords (excluding point_history and alert, which are often absent)
-  - −0.05 per rule/violation type where the exact point value is unclear
-  - −0.05 if the document language is ambiguous about which violations are excused vs unexcused
-  - −0.10 if key fields (organization name, policy name, effective date) are missing from the document
-A confidence_score of 1.0 means every schema table has explicit, unambiguous coverage with zero gaps — this is extremely rare. Typical range for real policies: 0.70–0.90. NEVER return 1.0 unless the document is a perfect, unambiguous specification.
-
 # Objective Reminder
 
 Your goal is to exhaustively extract and map all keywords relevant for the SQL schema, using the most helpful, minimal phrases possible, ensuring zero hallucination and factual completeness. Think step by step, referencing the schema for alignment, and present only the final, structured JSON object after your reasoning and mapping process is complete.

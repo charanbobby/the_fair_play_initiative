@@ -7,7 +7,7 @@ TARGET TABLES (the only tables this plan may touch):
   • region        — one row for the jurisdiction
   • organization_region — junction row linking the two
   • policy        — one row for the policy document itself
-  • rule          — one row per violation tier / escalation rule
+  • rule          — one row per point-generating violation, approved-leave exemption, or perfect-attendance reduction. NOT for corrective action levels, definitions, or procedures.
 
 OFF-LIMITS TABLES (do NOT plan any writes to these):
   • employee, attendance_log, point_history, alert
@@ -32,21 +32,31 @@ ID chaining — always set uses_cte = True and describe the full chain in cte_de
   organization.id → region.id → organization_region.(organization_id, region_id) → policy.(organization_id, region_id) → policy.id → rule.policy_id
   Without this chain, FK constraints cannot be satisfied.
 
-cte_description — this field carries the COMPLETE procedural plan. Use newline characters (\n) to separate each numbered step, rule group header, and individual rule row — do NOT concatenate everything into a single paragraph. It MUST contain all of the following:
+cte_description — this field carries the COMPLETE procedural plan. It MUST contain all of the following:
   1. For each table in INSERT order, a numbered step containing:
      - Table name and INSERT strategy (OR IGNORE / OR REPLACE)
      - Every column to be populated, mapped to the exact extracted keyword that provides its value
      - The natural key used for the existence check (matches the where_filters entry)
-  2. A complete enumeration of ALL rule rows in four groups — include every row from the policy; do not summarise or omit:
-     a. Violation/occurrence rules — one row per violation type (points > 0)
-     b. Approved-leave rules — one row per leave type (points = 0.0)
+  2. A complete enumeration of ALL rule rows in THREE groups — include every row from the policy; do not summarise or omit:
+     a. Violation/occurrence rules — one row per violation type that GENERATES points (points > 0)
+     b. Approved-leave exemption rules — one row per leave type that is explicitly excused (points = 0.0)
      c. Perfect-attendance reduction rules — one row per milestone (threshold = consecutive clean days: 30, 60, 90, 365; points = negative value)
-     d. Corrective-action trigger rules — one row per level (threshold = lower bound of point range; points = 0.0)
-     Also include operational rule rows for: rolling 12-month window, negative balance floor, occurrence definition, excused/unexcused determination deadlines.
      For each rule row provide: id (kebab slug), name, condition (plain-English HRIS trigger), threshold, points, description, active.
   3. ID chaining summary (one line per FK relationship).
-  4. Operational reminders — placeholders that need resolution from HRIS/facility master data (region code, timezone, mandatory OT points confirmation, etc.).
+  4. Operational reminders — placeholders that need resolution from HRIS/facility master data (region code, timezone, etc.).
   Completeness is critical — a missing rule row means the policy is partially loaded.
+
+RULE EXCLUSIONS — do NOT create rule rows for any of the following:
+  • Definitions or glossary terms (e.g. 'Occurrence', 'Rolling 12-Month Period') — these are policy metadata, not actionable rules
+  • Call-out procedures or notification requirements — these are processes, not point events
+  • Corrective action levels (e.g. Level 1 Verbal Warning, Level 5 Termination) — these are CONSEQUENCES triggered by accumulated points, not point-generating events; they belong in the alert table, not rule
+  • Immediate termination triggers (e.g. 3+ consecutive NCNS, falsification) — these are HR policy actions, not point rules
+  • Supervisor or HR administrative responsibilities (HRIS coding, audits, reviews)
+  • Operational parameters (rolling window period, balance floors, record retention)
+  • Scope statements (who the policy covers/excludes)
+  • Duplicate violations — if the policy says 'treated as [existing violation type]' (e.g. mandatory OT no-show = unexcused absence, plant shutdown no-return = unexcused absence), do NOT create a separate rule; the existing violation rule already covers it
+
+EXPECTED RULE COUNT: A typical single-site attendance policy produces 8–12 violation rules, 6–10 approved-leave exemptions, and 3–4 perfect-attendance reductions — roughly 20–25 rule rows total. If your count exceeds 30, you are likely over-extracting from definitions, procedures, or corrective action sections. Re-check against the exclusions list above.
 
 joins — for ingestion plans, use this field to describe FK dependency chains, NOT SQL joins:
   • left: the child table (the one holding the FK column)
@@ -56,11 +66,11 @@ joins — for ingestion plans, use this field to describe FK dependency chains, 
   List one entry per FK relationship, in dependency order.
 
 Rule rows — plan one row per:
-  • Each distinct violation type (NCNS 1st day, NCNS consecutive, unexcused full-day, unexcused half-day, tardy major, tardy minor, third minor tardy in month, early departure, holiday/critical day absence, plant shutdown no-return, mandatory OT no-show, voluntary OT no-show, and any other named in the policy)
-  • Each approved leave type that generates 0.0 points (FMLA, ADA, PTO/vacation, jury duty, military/USERRA, bereavement, workers comp, STD, and any other named in the policy)
+  • Each distinct violation type from the point table in the policy (NCNS 1st day, NCNS consecutive, unexcused full-day, unexcused half-day, tardy major, tardy minor, third minor tardy in month, early departure, holiday/critical day absence)
+  • Each approved leave type that the policy explicitly lists as generating 0.0 points (FMLA, ADA, PTO/vacation, jury duty, military/USERRA, bereavement, workers comp, STD, union steward/business leave)
   • Each perfect attendance reduction milestone (threshold = consecutive clean days: 30, 60, 90, 365; points = negative value)
-  • Each corrective action level (threshold = lower bound of the point range; points = 0.0 — these are trigger rules, not point-generating occurrences)
   Do NOT merge multiple violation types into a single rule row.
+  Do NOT create rule rows for items listed under RULE EXCLUSIONS above.
 
 Value derivation:
   • id (organization, region, policy): generate a lower-kebab-case slug (e.g. 'acme-manufacturing', 'hr-att-2024-001')
@@ -68,8 +78,8 @@ Value derivation:
   • region.timezone: infer from shift schedule context or mark as a placeholder (e.g. 'America/Detroit') to be confirmed from HRIS
   • region.labor_laws: collect all referenced statutes as comma-separated TEXT (e.g. 'FMLA, ADA, USERRA, Workers Compensation')
   • rule.condition: describe the HRIS/system condition that triggers this rule in plain English — do not write SQL
-  • rule.threshold: occurrence rules = 1; corrective action levels = lower bound of the point range; perfect attendance = consecutive clean days
-  • rule.points: positive for violations; 0.0 for approved-leave and CA-trigger rows; NEGATIVE for perfect-attendance reductions (e.g. -0.5, -1.0, -1.5, -2.0)
+  • rule.threshold: occurrence rules = 1 (unless the rule requires multiple events like third-minor-tardy = 3); perfect attendance = consecutive clean days
+  • rule.points: positive for violations; 0.0 for approved-leave exemptions; NEGATIVE for perfect-attendance reductions (e.g. -0.5, -1.0, -1.5, -2.0)
 
 Natural keys for existence checks (where_filters):
   • organization: name OR code
@@ -84,16 +94,6 @@ Planning rules:
 3. List where_filters: one existence check per table using the natural keys above. Set source_keyword to the extracted keyword that provides the natural key value.
 4. Put ALL column-to-keyword mappings and ALL rule row enumerations in cte_description. Do NOT put column mappings only in the purpose field of tables_required.
 5. Leave grouping_columns, aggregations, having_filters, and output_columns empty.
-
-confidence_score — CRITICAL: a score of 1.0 is INVALID for real-world policies. NEVER return 1.0.
-  Start at 1.0 and deduct for EACH issue (deductions are cumulative):
-  • −0.10 per placeholder value that needs resolution from external data (region code, timezone, etc.) — almost every policy has at least one
-  • −0.10 per ambiguous policy clause where you had to interpret intent
-  • −0.05 per rule row where the exact point value or threshold is unclear in the source text
-  • −0.05 if the policy references statutes or leave types you are uncertain apply
-  • −0.10 if the policy document appears incomplete or truncated (the input is always truncated to 2000 chars, so always deduct this)
-  • −0.05 if any column value was inferred rather than explicitly stated in the document
-  The input document is ALWAYS truncated, so the minimum deduction is −0.10. Real-world range: 0.55–0.85. A score above 0.90 requires justification.
 
 # FPI Schema
 
