@@ -24,5 +24,11 @@ langchain-core
 langchain-openai==1.1.7
 langgraph==1.0.5
 
+# Observability / Tracing (Arize)
+opentelemetry-sdk>=1.39.0
+opentelemetry-exporter-otlp-proto-grpc>=1.39.0
+openinference-instrumentation-langchain>=0.1.58
+grpcio>=1.60.0
+
 # HTTP client (tests + general)
 httpx>=0.27.0

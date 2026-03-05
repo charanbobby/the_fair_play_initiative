@@ -56,25 +56,54 @@ def log_error(endpoint: str, trace_id: str, error: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# No-op safe OpenTelemetry / Arize Phoenix initialisation
+# OpenTelemetry / Arize tracing — no-op safe
 # ---------------------------------------------------------------------------
 
 def _try_init_tracing() -> None:
     """
-    Attempt to initialise Arize Phoenix + OpenTelemetry tracing.
+    Initialise Arize OTLP tracing with LangChain auto-instrumentation.
 
-    This is entirely best-effort:  if the collector is unreachable or the
-    SDK packages are not installed the function swallows the exception and
-    logs a warning, so the server keeps running in un-traced mode.
-
-    TODO: replace with proper OTLP endpoint config for production observability.
+    Best-effort: if packages are missing or the collector is unreachable the
+    app keeps running in un-traced mode.
     """
     if not settings.ARIZE_API_KEY:
         logger.info("tracing=disabled reason='ARIZE_API_KEY not set'")
         return
+    if not settings.ARIZE_SPACE_ID:
+        logger.info("tracing=disabled reason='ARIZE_SPACE_ID not set'")
+        return
     try:
-        from opentelemetry.sdk.trace import TracerProvider  # noqa: F401
-        logger.info("tracing=enabled provider=arize-phoenix")
+        import grpc
+        from opentelemetry.sdk.trace import TracerProvider, Resource
+        from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
+            OTLPSpanExporter,
+        )
+        from openinference.instrumentation.langchain import LangChainInstrumentor
+
+        resource = Resource.create(
+            {"openinference.project.name": "fair-play-initiative"}
+        )
+
+        exporter = OTLPSpanExporter(
+            endpoint="otlp.arize.com",
+            headers=[
+                ("authorization", settings.ARIZE_API_KEY),
+                ("api_key", settings.ARIZE_API_KEY),
+                ("arize-space-id", settings.ARIZE_SPACE_ID),
+                ("space_id", settings.ARIZE_SPACE_ID),
+                ("arize-interface", "otel"),
+            ],
+            credentials=grpc.ssl_channel_credentials(),
+        )
+
+        provider = TracerProvider(resource=resource)
+        provider.add_span_processor(SimpleSpanProcessor(exporter))
+
+        LangChainInstrumentor().instrument(tracer_provider=provider)
+        logger.info(
+            "tracing=enabled provider=arize project=fair-play-initiative"
+        )
     except Exception as exc:  # pragma: no cover
         logger.warning(f"tracing=failed reason={exc!r}")
 
