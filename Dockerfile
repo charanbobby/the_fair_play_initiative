@@ -14,11 +14,9 @@
 #   Push this repo to a Hugging Face Space (SDK: Docker).
 #   HF builds this file automatically and exposes port 7860.
 
-FROM python:3.11-slim
-
-# git is required by HF Spaces (injected git-config steps during build)
-RUN apt-get update && apt-get install -y --no-install-recommends git && \
-    rm -rf /var/lib/apt/lists/*
+# python:3.11 (not -slim) includes git, which HF Spaces requires
+# (HF injects git-config commands before any RUN instructions)
+FROM python:3.11
 
 # HF Spaces runs as a non-root user — create one
 RUN useradd -m -u 1000 appuser
