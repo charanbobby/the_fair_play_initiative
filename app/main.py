@@ -101,7 +101,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Fair Play Initiative — API",
     description="FastAPI backend for the Fair Play Initiative attendance management platform.",
-    version="0.5.0",
+    version="0.5.1",
     lifespan=lifespan,
     redirect_slashes=False,
 )
