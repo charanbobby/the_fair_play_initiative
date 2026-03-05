@@ -113,7 +113,7 @@
               <h1 class="text-xl font-bold">The Fair Play Initiative</h1>
               <p class="text-xs text-slate-400">
                 Balanced Attendance Management
-                <span class="ml-2 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.5.1</span>
+                <span class="ml-2 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.5.2</span>
               </p>
             </div>
           </div>
@@ -2079,6 +2079,40 @@
         other_relevant_terms: "Other Terms",
       };
 
+      function renderConfidenceBadge(label, pct) {
+        const barCls = pct >= 90 ? "bg-emerald-500" : pct >= 70 ? "bg-amber-500" : "bg-red-500";
+        const txtCls = pct >= 90 ? "text-emerald-600" : pct >= 70 ? "text-amber-600" : "text-red-600";
+        return `<div class="flex items-center gap-3 mt-3">
+          <span class="text-xs text-slate-400">${label} confidence</span>
+          <div class="flex items-center gap-2 flex-1 max-w-[200px]">
+            <div class="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <div class="h-full ${barCls} rounded-full" style="width:${pct}%"></div>
+            </div>
+            <span class="text-xs font-semibold ${txtCls}">${pct}%</span>
+          </div>
+        </div>`;
+      }
+
+      /**
+       * Normalize cte_description into newline-separated lines.
+       * LLM structured output often returns a single paragraph; we split
+       * before numbered items like "1. org", "2. region", "A) Violation".
+       */
+      function normalizeCteDescription(raw) {
+        if (!raw) return "";
+        // If it already has several newlines, it's fine
+        if ((raw.match(/\n/g) || []).length > 5) return raw;
+        // Insert newlines before numbered table steps: "1. table" or "1) table"
+        let s = raw.replace(/(\.\s*)(\d+[.)]\s+)/g, "$1\n$2");
+        // Insert newlines before lettered groups: "A) ..."
+        s = s.replace(/([.)]\s*)([A-F]\)\s+)/g, "$1\n$2");
+        // Insert newlines before numbered rule rows: "1. id:" or "13. id:"
+        s = s.replace(/([.)]\s*)(\d+\.\s+id:\s+)/g, "$1\n$2");
+        // Insert newlines before section headers
+        s = s.replace(/([.)]\s*)((?:Complete|Notes|ID chaining|Operational|End-to-end|Additional)\b)/gi, "$1\n$2");
+        return s;
+      }
+
       function renderAnalysisResults(data) {
         // ── Keywords section ──────────────────────────────────────────────
         const kw = data.keywords || {};
@@ -2127,8 +2161,7 @@
         // Confidence badge
         if (kw.confidence_score !== undefined) {
           const pct = Math.round(kw.confidence_score * 100);
-          kwContainer.innerHTML += `
-            <div class="mt-3 text-xs text-slate-400">Extraction confidence: <span class="font-medium text-slate-600">${pct}%</span></div>`;
+          kwContainer.innerHTML += renderConfidenceBadge("Extraction", pct);
         }
 
         // ── Plan section ──────────────────────────────────────────────────
@@ -2242,7 +2275,7 @@
 
         if (plan.cte_description) {
           const esc = (s) => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-          const lines = plan.cte_description.split("\n");
+          const lines = normalizeCteDescription(plan.cte_description).split("\n");
           let cteHTML = "";
           let inGroup = false;   // inside a collapsible rule group (A-F)
           let ruleCount = 0;
@@ -2253,16 +2286,18 @@
             const trimmed = raw.trim();
             if (!trimmed) continue;
 
-            // Table step headers: "1) organization — INSERT OR IGNORE"
-            const stepMatch = trimmed.match(/^(\d+)\)\s+(.*)/);
-            if (stepMatch) {
+            // Table step headers: "1) organization — INSERT OR IGNORE" or "1. organization: INSERT OR IGNORE"
+            const stepMatch = trimmed.match(/^(\d+)[.)]\s+(.*)/);
+            // Don't match rule rows like "1. id: ncns"
+            if (stepMatch && !trimmed.match(/^\d+[.)]\s+id:\s+/)) {
               if (inGroup) { cteHTML += `</div></details>`; inGroup = false; }
               if (headerBuf) { cteHTML += `<div class="text-xs text-slate-500 mb-2">${esc(headerBuf)}</div>`; headerBuf = ""; }
               const num = stepMatch[1];
               const rest = stepMatch[2];
-              const dashIdx = rest.indexOf("—");
-              const tbl = dashIdx > 0 ? rest.substring(0, dashIdx).trim() : rest;
-              const strat = dashIdx > 0 ? rest.substring(dashIdx) : "";
+              // Handle "table — strategy" or "table: strategy" or "table (strategy)"
+              const sepMatch = rest.match(/^([\w_]+)\s*(?:—|:|:)\s*(.*)/);
+              const tbl = sepMatch ? sepMatch[1] : rest.split(/\s/)[0];
+              const strat = sepMatch ? (sepMatch[2].startsWith("—") ? sepMatch[2] : "— " + sepMatch[2]) : "";
               cteHTML += `<div class="flex items-start gap-2 py-1.5">
                 <span class="bg-indigo-100 text-indigo-700 text-xs font-bold w-5 h-5 rounded flex items-center justify-center shrink-0">${num}</span>
                 <div class="text-xs"><span class="font-mono font-semibold text-slate-700">${esc(tbl)}</span> <span class="text-slate-400">${esc(strat)}</span></div>
@@ -2271,7 +2306,7 @@
               let sub = [];
               while (i + 1 < lines.length) {
                 const next = lines[i + 1].trim();
-                if (!next || /^\d+\)\s/.test(next) || /^[A-Z]\)\s/.test(next) || /^(Complete|Notes|ID chaining|Operational|End-to-end|Additional)/i.test(next)) break;
+                if (!next || /^\d+[.)]\s/.test(next) || /^[A-Z]\)\s/.test(next) || /^(Complete|Notes|ID chaining|Operational|End-to-end|Additional)/i.test(next)) break;
                 sub.push(next);
                 i++;
               }
@@ -2305,7 +2340,7 @@
               let ruleSub = [];
               while (i + 1 < lines.length) {
                 const next = lines[i + 1].trim();
-                if (!next || /^\d+\.\s+id:/.test(next) || /^[A-Z]\)\s/.test(next) || /^\d+\)\s/.test(next) || /^(Complete|Notes|ID chaining|Operational|End-to-end|Additional)/i.test(next)) break;
+                if (!next || /^\d+\.\s+id:/.test(next) || /^[A-Z]\)\s/.test(next) || /^\d+[.)]\s/.test(next) || /^(Complete|Notes|ID chaining|Operational|End-to-end|Additional)/i.test(next)) break;
                 ruleSub.push(next);
                 i++;
               }
@@ -2348,7 +2383,7 @@
               while (i + 1 < lines.length) {
                 const next = lines[i + 1].trim();
                 if (!next) { i++; continue; }
-                if (/^(\d+\)\s|[A-Z]\)\s|Complete|Notes on|ID chaining|Operational reminders|End-to-end|Additional implementation)/i.test(next)) break;
+                if (/^(\d+[.)]\s|[A-Z]\)\s|Complete|Notes on|ID chaining|Operational reminders|End-to-end|Additional implementation)/i.test(next)) break;
                 body.push(next);
                 i++;
               }
@@ -2377,7 +2412,7 @@
 
         if (plan.confidence_score !== undefined) {
           const pct = Math.round(plan.confidence_score * 100);
-          planHTML += `<div class="text-xs text-slate-400 mt-2">Plan confidence: <span class="font-medium text-slate-600">${pct}%</span></div>`;
+          planHTML += renderConfidenceBadge("Plan", pct);
         }
 
         planContainer.innerHTML = planHTML || `<p class="text-sm text-slate-400">No plan generated.</p>`;

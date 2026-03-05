@@ -32,7 +32,7 @@ ID chaining — always set uses_cte = True and describe the full chain in cte_de
   organization.id → region.id → organization_region.(organization_id, region_id) → policy.(organization_id, region_id) → policy.id → rule.policy_id
   Without this chain, FK constraints cannot be satisfied.
 
-cte_description — this field carries the COMPLETE procedural plan. It MUST contain all of the following (gpt-5-mini: do not omit any section):
+cte_description — this field carries the COMPLETE procedural plan. Use newline characters (\n) to separate each numbered step, rule group header, and individual rule row — do NOT concatenate everything into a single paragraph. It MUST contain all of the following:
   1. For each table in INSERT order, a numbered step containing:
      - Table name and INSERT strategy (OR IGNORE / OR REPLACE)
      - Every column to be populated, mapped to the exact extracted keyword that provides its value
