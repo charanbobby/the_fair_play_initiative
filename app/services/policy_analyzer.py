@@ -13,7 +13,6 @@ Graph:  START → node_extract → node_plan → END
 from __future__ import annotations
 
 import io
-import json
 from pathlib import Path
 from typing import TypedDict
 
@@ -169,22 +168,82 @@ def _extract_text(filename: str, content: bytes) -> str:
 # Helper: format keywords for the plan prompt human message
 # ---------------------------------------------------------------------------
 
+_KEYWORD_FIELDS = [
+    "policy", "organization", "region", "rule",
+    "attendance_log", "point_history", "alert", "other_relevant_terms",
+]
+
+
 def _format_keywords(kw: KeywordExtraction) -> str:
+    """Format a KeywordExtraction into a readable string for downstream prompts."""
     lines: list[str] = []
-    fields = [
-        ("policy", kw.policy),
-        ("organization", kw.organization),
-        ("region", kw.region),
-        ("rule", kw.rule),
-        ("attendance_log", kw.attendance_log),
-        ("point_history", kw.point_history),
-        ("alert", kw.alert),
-        ("other_relevant_terms", kw.other_relevant_terms),
-    ]
-    for label, terms in fields:
-        if terms:
-            lines.append(f"{label}: {', '.join(terms)}")
-    lines.append(f"confidence_score: {kw.confidence_score}")
+    for field in _KEYWORD_FIELDS:
+        values = getattr(kw, field, [])
+        if values:
+            lines.append(f"[{field}]")
+            lines.extend(f"  • {v}" for v in values)
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Helper: plain-text serialiser for SQLQueryPlan (matches notebook output)
+# ---------------------------------------------------------------------------
+
+def _format_plan(plan: SQLQueryPlan) -> str:
+    lines: list[str] = []
+    lines.append(f"OBJECTIVE\n  {plan.objective}\n")
+
+    if plan.tables_required:
+        lines.append("TABLES")
+        for t in plan.tables_required:
+            lines.append(f"  [{t.alias}] {t.table}")
+            lines.append(f"       purpose: {t.purpose}")
+        lines.append("")
+
+    if plan.joins:
+        lines.append("JOINS")
+        for j in plan.joins:
+            lines.append(f"  {j.join_type} JOIN {j.right} ON {j.condition}")
+        lines.append("")
+
+    if plan.where_filters:
+        lines.append("WHERE FILTERS")
+        for f in plan.where_filters:
+            lines.append(f"  • {f.description}")
+            lines.append(f"    expr   : {f.expression}")
+            lines.append(f"    keyword: {f.source_keyword}")
+        lines.append("")
+
+    if plan.grouping_columns:
+        lines.append("GROUP BY")
+        lines.append("  " + ", ".join(plan.grouping_columns))
+        lines.append("")
+
+    if plan.aggregations:
+        lines.append("AGGREGATIONS")
+        for a in plan.aggregations:
+            lines.append(f"  [{a.column_name}]")
+            lines.append(f"    expr   : {a.expression}")
+            lines.append(f"    purpose: {a.purpose}")
+        lines.append("")
+
+    if plan.having_filters:
+        lines.append("HAVING FILTERS")
+        for f in plan.having_filters:
+            lines.append(f"  • {f.description}")
+            lines.append(f"    expr   : {f.expression}")
+            lines.append(f"    keyword: {f.source_keyword}")
+        lines.append("")
+
+    if plan.output_columns:
+        lines.append("OUTPUT COLUMNS")
+        lines.append("  " + ", ".join(plan.output_columns))
+        lines.append("")
+
+    if plan.uses_cte:
+        lines.append("CTE")
+        lines.append(f"  {plan.cte_description or '(no description)'}")
+
     return "\n".join(lines)
 
 
@@ -224,8 +283,12 @@ async def analyze_policy_document(filename: str, content: bytes) -> PolicyAnalys
     if final_state.get("error"):
         raise RuntimeError(final_state["error"])
 
+    kw = final_state["keywords"]
+    plan = final_state["sql_plan"]
     return PolicyAnalysisResponse(
         filename=filename,
-        keywords=final_state["keywords"],
-        sql_plan=final_state["sql_plan"],
+        keywords=kw,
+        sql_plan=plan,
+        formatted_keywords=_format_keywords(kw) if kw else "",
+        formatted_plan=_format_plan(plan) if plan else "",
     )

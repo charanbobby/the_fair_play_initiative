@@ -416,3 +416,5 @@ class PolicyAnalysisResponse(BaseModel):
     filename: str
     keywords: KeywordExtraction
     sql_plan: SQLQueryPlan
+    formatted_keywords: str = Field(default="", description="Plain-text formatted keywords (matches notebook output).")
+    formatted_plan: str = Field(default="", description="Plain-text formatted plan (matches notebook output).")

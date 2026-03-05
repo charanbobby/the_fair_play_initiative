@@ -113,7 +113,7 @@
               <h1 class="text-xl font-bold">The Fair Play Initiative</h1>
               <p class="text-xs text-slate-400">
                 Balanced Attendance Management
-                <span class="ml-2 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.5.4</span>
+                <span class="ml-2 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.5.5</span>
               </p>
             </div>
           </div>
@@ -408,34 +408,63 @@
                 <i data-lucide="sparkles" class="w-5 h-5 text-indigo-500"></i>
                 Analysis Results
               </h4>
-              <button
-                onclick="clearAnalysisResults()"
-                class="text-sm bg-slate-100 text-slate-700 px-3 py-1 rounded-lg hover:bg-slate-200 transition"
-              >
-                Clear
-              </button>
-            </div>
-
-            <!-- Extracted Keywords -->
-            <div class="mb-6">
-              <h5 class="text-sm font-semibold text-slate-600 uppercase tracking-wide mb-3">
-                Extracted Keywords
-              </h5>
-              <div id="keywords-section" class="space-y-3">
-                <!-- Populated by JS -->
+              <div class="flex items-center gap-2">
+                <button
+                  id="view-toggle"
+                  onclick="toggleAnalysisView()"
+                  class="text-xs bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition font-medium"
+                >
+                  Plain Text
+                </button>
+                <button
+                  onclick="clearAnalysisResults()"
+                  class="text-sm bg-slate-100 text-slate-700 px-3 py-1 rounded-lg hover:bg-slate-200 transition"
+                >
+                  Clear
+                </button>
               </div>
             </div>
 
-            <!-- Divider -->
-            <div class="border-t border-slate-200 my-6"></div>
+            <!-- Rich view (default) -->
+            <div id="rich-view">
+              <!-- Extracted Keywords -->
+              <div class="mb-6">
+                <h5 class="text-sm font-semibold text-slate-600 uppercase tracking-wide mb-3">
+                  Extracted Keywords
+                </h5>
+                <div id="keywords-section" class="space-y-3">
+                  <!-- Populated by JS -->
+                </div>
+              </div>
 
-            <!-- Query Plan -->
-            <div>
-              <h5 class="text-sm font-semibold text-slate-600 uppercase tracking-wide mb-3">
-                SQL Ingestion Plan
-              </h5>
-              <div id="plan-section" class="min-w-0">
-                <!-- Populated by JS -->
+              <!-- Divider -->
+              <div class="border-t border-slate-200 my-6"></div>
+
+              <!-- Query Plan -->
+              <div>
+                <h5 class="text-sm font-semibold text-slate-600 uppercase tracking-wide mb-3">
+                  SQL Ingestion Plan
+                </h5>
+                <div id="plan-section" class="min-w-0">
+                  <!-- Populated by JS -->
+                </div>
+              </div>
+            </div>
+
+            <!-- Plain-text view (hidden, matches notebook _format_plan output) -->
+            <div id="plain-view" class="hidden">
+              <div class="mb-6">
+                <h5 class="text-sm font-semibold text-slate-600 uppercase tracking-wide mb-3">
+                  Extracted Keywords
+                </h5>
+                <pre id="plain-keywords" class="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs text-slate-700 font-mono whitespace-pre-wrap leading-relaxed max-h-[24rem] overflow-y-auto"></pre>
+              </div>
+              <div class="border-t border-slate-200 my-6"></div>
+              <div>
+                <h5 class="text-sm font-semibold text-slate-600 uppercase tracking-wide mb-3">
+                  SQL Ingestion Plan
+                </h5>
+                <pre id="plain-plan" class="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs text-slate-700 font-mono whitespace-pre-wrap leading-relaxed max-h-[32rem] overflow-y-auto"></pre>
               </div>
             </div>
           </div>
@@ -2056,6 +2085,26 @@
         }
       }
 
+      // ── Plain-text / Rich view toggle ──────────────────────────────────
+      let _analysisViewMode = "rich"; // "rich" or "plain"
+
+      function toggleAnalysisView() {
+        const btn = document.getElementById("view-toggle");
+        const rich = document.getElementById("rich-view");
+        const plain = document.getElementById("plain-view");
+        if (_analysisViewMode === "rich") {
+          _analysisViewMode = "plain";
+          rich.classList.add("hidden");
+          plain.classList.remove("hidden");
+          btn.textContent = "Rich View";
+        } else {
+          _analysisViewMode = "rich";
+          plain.classList.add("hidden");
+          rich.classList.remove("hidden");
+          btn.textContent = "Plain Text";
+        }
+      }
+
       // Colour palette per entity group
       const ENTITY_COLOURS = {
         policy:               "bg-indigo-100 text-indigo-700",
@@ -2114,6 +2163,11 @@
       }
 
       function renderAnalysisResults(data) {
+        // ── Plain-text views (from backend _format_keywords / _format_plan) ─
+        const esc = (s) => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+        document.getElementById("plain-keywords").textContent = data.formatted_keywords || "(no keywords)";
+        document.getElementById("plain-plan").textContent = data.formatted_plan || "(no plan)";
+
         // ── Keywords section ──────────────────────────────────────────────
         const kw = data.keywords || {};
         const kwContainer = document.getElementById("keywords-section");
@@ -2423,6 +2477,13 @@
         document.getElementById("analysis-results").classList.add("hidden");
         document.getElementById("keywords-section").innerHTML = "";
         document.getElementById("plan-section").innerHTML = "";
+        document.getElementById("plain-keywords").textContent = "";
+        document.getElementById("plain-plan").textContent = "";
+        // Reset to rich view
+        _analysisViewMode = "rich";
+        document.getElementById("rich-view").classList.remove("hidden");
+        document.getElementById("plain-view").classList.add("hidden");
+        document.getElementById("view-toggle").textContent = "Plain Text";
         const fileInput = document.getElementById("policy-file");
         if (fileInput) fileInput.value = "";
       }
