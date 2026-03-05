@@ -32,8 +32,8 @@ RUN pip install --no-cache-dir uv
 # Install Python dependencies using uv
 # --system: installs into the system Python (correct inside Docker, no venv needed)
 # ---------------------------------------------------------------------------
-COPY requirements.txt .
-RUN uv pip install --system --no-cache -r requirements.txt
+COPY requirements-backend.txt .
+RUN uv pip install --system --no-cache -r requirements-backend.txt
 
 # ---------------------------------------------------------------------------
 # Copy application source
