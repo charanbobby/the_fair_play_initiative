@@ -78,7 +78,22 @@ def node_extract(state: FPIState) -> dict:
         SystemMessage(content=_KEYWORD_SYSTEM_MSG),
         HumanMessage(content=state["pdf_text"][:4000]),
     ])
+    # Post-process: enforce realistic confidence
+    if result.confidence_score >= 1.0:
+        result.confidence_score = 0.85
+    result.confidence_score = round(min(result.confidence_score, 0.95), 2)
     return {"keywords": result}
+
+
+def _adjust_confidence(score: float, has_placeholders: bool) -> float:
+    """Clamp LLM confidence to a realistic range.
+    The input document is always truncated, so 1.0 is never valid.
+    """
+    if score >= 1.0:
+        score = 0.82  # sensible default when LLM ignores instructions
+    if has_placeholders and score > 0.85:
+        score = 0.85
+    return round(min(max(score, 0.0), 0.95), 2)
 
 
 def node_plan(state: FPIState) -> dict:
@@ -98,6 +113,11 @@ def node_plan(state: FPIState) -> dict:
         SystemMessage(content=_PLAN_SYSTEM_MSG),
         HumanMessage(content=human_msg),
     ])
+    # Post-process: enforce realistic confidence scores
+    has_placeholders = bool(
+        result.cte_description and "placeholder" in result.cte_description.lower()
+    )
+    result.confidence_score = _adjust_confidence(result.confidence_score, has_placeholders)
     return {"sql_plan": result}
 
 

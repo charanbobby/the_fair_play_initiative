@@ -85,14 +85,15 @@ Planning rules:
 4. Put ALL column-to-keyword mappings and ALL rule row enumerations in cte_description. Do NOT put column mappings only in the purpose field of tables_required.
 5. Leave grouping_columns, aggregations, having_filters, and output_columns empty.
 
-confidence_score — assess honestly (do NOT default to 1.0):
-  Start at 1.0 and deduct for each issue:
-  • −0.10 per placeholder value that needs resolution from external data (region code, timezone, etc.)
+confidence_score — CRITICAL: a score of 1.0 is INVALID for real-world policies. NEVER return 1.0.
+  Start at 1.0 and deduct for EACH issue (deductions are cumulative):
+  • −0.10 per placeholder value that needs resolution from external data (region code, timezone, etc.) — almost every policy has at least one
   • −0.10 per ambiguous policy clause where you had to interpret intent
   • −0.05 per rule row where the exact point value or threshold is unclear in the source text
   • −0.05 if the policy references statutes or leave types you are uncertain apply
-  • −0.10 if the policy document appears incomplete or truncated
-  Typical range: 0.60–0.90 for real-world policies. A score of 1.0 means every value is explicitly stated with zero ambiguity — this is rare.
+  • −0.10 if the policy document appears incomplete or truncated (the input is always truncated to 2000 chars, so always deduct this)
+  • −0.05 if any column value was inferred rather than explicitly stated in the document
+  The input document is ALWAYS truncated, so the minimum deduction is −0.10. Real-world range: 0.55–0.85. A score above 0.90 requires justification.
 
 # FPI Schema
 
