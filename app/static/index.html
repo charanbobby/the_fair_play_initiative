@@ -2340,6 +2340,28 @@
             const trimmed = raw.trim();
             if (!trimmed) continue;
 
+            // Named sections that may be numbered: "13. ID CHAINING SUMMARY: ..." or "14. OPERATIONAL REMINDERS: ..."
+            const namedSectionInStep = trimmed.match(/^\d+[.)]\s*(ID chaining|Operational|Complete|Notes|End-to-end|Additional)\b(.*)/i);
+            if (namedSectionInStep) {
+              if (inGroup) { cteHTML += `<span class="text-slate-400 text-xs ml-1">(${ruleCount} rules)</span></div></details>`; inGroup = false; }
+              if (headerBuf) { cteHTML += `<div class="text-xs text-slate-500 mb-2">${esc(headerBuf)}</div>`; headerBuf = ""; }
+              const sectionTitle = namedSectionInStep[1] + (namedSectionInStep[2] || "");
+              cteHTML += `<div class="mt-3 mb-1 text-xs font-semibold text-slate-500 uppercase tracking-wide">${esc(sectionTitle.replace(/^[:\s—]+/, "").trim())}</div>`;
+              // Collect body lines
+              let body = [];
+              while (i + 1 < lines.length) {
+                const next = lines[i + 1].trim();
+                if (!next) { i++; continue; }
+                if (/^(\d+[.)]\s|[A-Z]\)\s)/i.test(next)) break;
+                body.push(next);
+                i++;
+              }
+              if (body.length) {
+                cteHTML += `<div class="text-xs text-slate-500 leading-relaxed ml-2">${body.map(s => esc(s)).join("<br>")}</div>`;
+              }
+              continue;
+            }
+
             // Table step headers: "1) organization — INSERT OR IGNORE" or "1. organization: INSERT OR IGNORE"
             const stepMatch = trimmed.match(/^(\d+)[.)]\s+(.*)/);
             // Don't match rule rows like "1. id: ncns"
@@ -2351,10 +2373,26 @@
               // Handle "table — strategy" or "table: strategy" or "table (strategy)"
               const sepMatch = rest.match(/^([\w_]+)\s*(?:—|:|:)\s*(.*)/);
               const tbl = sepMatch ? sepMatch[1] : rest.split(/\s/)[0];
-              const strat = sepMatch ? (sepMatch[2].startsWith("—") ? sepMatch[2] : "— " + sepMatch[2]) : "";
+              const rawStrat = sepMatch ? sepMatch[2] : "";
+              // Split long strategy text at semicolons for readability
+              const stratParts = rawStrat.split(/;\s*/);
+              let stratHTML;
+              if (stratParts.length > 2) {
+                // Multi-part step (e.g. "INSERT OR REPLACE; columns: ...; natural key: ...")
+                const header = stratParts[0];
+                const details = stratParts.slice(1).filter(Boolean);
+                stratHTML = `<div class="text-xs min-w-0">
+                  <span class="font-mono font-semibold text-slate-700">${esc(tbl)}</span>
+                  <span class="text-slate-400"> — ${esc(header)}</span>
+                  <div class="ml-4 mt-1 space-y-0.5">${details.map(d => `<div class="text-slate-400 break-words">• ${esc(d.trim())}</div>`).join("")}</div>
+                </div>`;
+              } else {
+                const strat = rawStrat.startsWith("—") ? rawStrat : rawStrat ? "— " + rawStrat : "";
+                stratHTML = `<div class="text-xs min-w-0"><span class="font-mono font-semibold text-slate-700">${esc(tbl)}</span> <span class="text-slate-400 break-words">${esc(strat)}</span></div>`;
+              }
               cteHTML += `<div class="flex items-start gap-2 py-1.5">
                 <span class="bg-indigo-100 text-indigo-700 text-xs font-bold w-5 h-5 rounded flex items-center justify-center shrink-0">${num}</span>
-                <div class="text-xs"><span class="font-mono font-semibold text-slate-700">${esc(tbl)}</span> <span class="text-slate-400">${esc(strat)}</span></div>
+                ${stratHTML}
               </div>`;
               // Collect sub-lines until next section
               let sub = [];
