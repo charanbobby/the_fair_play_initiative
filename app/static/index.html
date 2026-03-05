@@ -400,29 +400,42 @@
             </button>
           </div>
 
-          <!-- Extracted Rules Preview -->
-          <div id="rules-preview" class="mt-8 hidden">
-            <div class="flex items-center justify-between mb-4">
-              <h4 class="text-md font-semibold text-slate-800">
-                Extracted Rules Preview
+          <!-- Analysis Results -->
+          <div id="analysis-results" class="mt-8 hidden">
+            <div class="flex items-center justify-between mb-6">
+              <h4 class="text-md font-semibold text-slate-800 flex items-center gap-2">
+                <i data-lucide="sparkles" class="w-5 h-5 text-indigo-500"></i>
+                Analysis Results
               </h4>
-              <div class="flex gap-2">
-                <button
-                  onclick="approveAllRules()"
-                  class="text-sm bg-emerald-100 text-emerald-700 px-3 py-1 rounded-lg hover:bg-emerald-200 transition"
-                >
-                  Approve All
-                </button>
-                <button
-                  onclick="clearRules()"
-                  class="text-sm bg-slate-100 text-slate-700 px-3 py-1 rounded-lg hover:bg-slate-200 transition"
-                >
-                  Clear
-                </button>
+              <button
+                onclick="clearAnalysisResults()"
+                class="text-sm bg-slate-100 text-slate-700 px-3 py-1 rounded-lg hover:bg-slate-200 transition"
+              >
+                Clear
+              </button>
+            </div>
+
+            <!-- Extracted Keywords -->
+            <div class="mb-6">
+              <h5 class="text-sm font-semibold text-slate-600 uppercase tracking-wide mb-3">
+                Extracted Keywords
+              </h5>
+              <div id="keywords-section" class="space-y-3">
+                <!-- Populated by JS -->
               </div>
             </div>
-            <div id="rules-list" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <!-- Rules populated by JS -->
+
+            <!-- Divider -->
+            <div class="border-t border-slate-200 my-6"></div>
+
+            <!-- Query Plan -->
+            <div>
+              <h5 class="text-sm font-semibold text-slate-600 uppercase tracking-wide mb-3">
+                SQL Ingestion Plan
+              </h5>
+              <div id="plan-section">
+                <!-- Populated by JS -->
+              </div>
             </div>
           </div>
 
@@ -2001,99 +2014,176 @@
         if (file) processPolicyFile(file);
       }
 
-      function processPolicyFile(file) {
-        showToast(`Processing ${file.name}...`);
+      async function processPolicyFile(file) {
+        const dropzone = document.getElementById("policy-dropzone");
+        const originalHTML = dropzone.innerHTML;
 
-        // Simulate AI extraction
-        setTimeout(() => {
-          const extractedRules = [
-            {
-              id: Date.now(),
-              name: "Extended Lunch (> 45 min)",
-              condition: "extended-break",
-              threshold: 45,
-              points: 0.5,
-              description: "Taking lunch break longer than 45 minutes",
-              active: false,
-            },
-            {
-              id: Date.now() + 1,
-              name: "Unauthorized Overtime",
-              condition: "unauthorized-ot",
-              threshold: 0,
-              points: 1.0,
-              description: "Working overtime without prior approval",
-              active: false,
-            },
-          ];
+        // Show loading state
+        dropzone.innerHTML = `
+          <div class="flex flex-col items-center gap-3 py-4">
+            <div class="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+            <p class="text-sm font-medium text-slate-600">Analysing <span class="font-semibold">${file.name}</span>…</p>
+            <p class="text-xs text-slate-400">Extracting keywords and building ingestion plan</p>
+          </div>`;
 
-          state.pendingRules = extractedRules;
-          renderPendingRules();
-          document.getElementById("rules-preview").classList.remove("hidden");
-          showToast("Rules extracted successfully!");
-        }, 2000);
-      }
+        try {
+          const formData = new FormData();
+          formData.append("file", file);
 
-      function renderPendingRules() {
-        document.getElementById("rules-list").innerHTML = state.pendingRules
-          .map(
-            (rule) => `
-                <div class="rule-card bg-slate-50 rounded-xl p-4 border-2 border-dashed border-slate-300">
-                    <div class="flex items-start justify-between mb-2">
-                        <h5 class="font-medium text-slate-800">${rule.name}</h5>
-                        <span class="bg-amber-100 text-amber-700 text-xs px-2 py-1 rounded-full">Pending</span>
-                    </div>
-                    <p class="text-sm text-slate-500 mb-3">${rule.description}</p>
-                    <div class="flex items-center gap-4 text-sm mb-3">
-                        <span class="text-slate-600"><i data-lucide="clock" class="w-4 h-4 inline mr-1"></i> > ${rule.threshold} min</span>
-                        <span class="text-slate-600"><i data-lucide="alert-circle" class="w-4 h-4 inline mr-1"></i> ${rule.points} pts</span>
-                    </div>
-                    <div class="flex gap-2">
-                        <button onclick="approveRule(${rule.id})" class="flex-1 bg-emerald-100 text-emerald-700 py-2 rounded-lg text-sm font-medium hover:bg-emerald-200 transition">Approve</button>
-                        <button onclick="rejectRule(${rule.id})" class="flex-1 bg-slate-100 text-slate-700 py-2 rounded-lg text-sm font-medium hover:bg-slate-200 transition">Reject</button>
-                    </div>
-                </div>
-            `,
-          )
-          .join("");
-        lucide.createIcons();
-      }
+          const response = await fetch("/api/v1/policies/analyze", {
+            method: "POST",
+            body: formData,
+          });
 
-      function approveRule(id) {
-        const rule = state.pendingRules.find((r) => r.id === id);
-        if (rule) {
-          rule.active = true;
-          state.rules.push(rule);
-          state.pendingRules = state.pendingRules.filter((r) => r.id !== id);
-          renderPendingRules();
-          renderActiveRules();
-          updateStats();
-          showToast("Rule approved and activated");
+          if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.detail || `Server error ${response.status}`);
+          }
+
+          const data = await response.json();
+          renderAnalysisResults(data);
+          document.getElementById("analysis-results").classList.remove("hidden");
+          showToast("Analysis complete!");
+        } catch (err) {
+          showToast(`Analysis failed: ${err.message}`, "error");
+        } finally {
+          dropzone.innerHTML = originalHTML;
+          // Re-attach file input handler after restoring HTML
+          const fileInput = document.getElementById("policy-file");
+          if (fileInput) fileInput.onchange = handlePolicyUpload;
+          lucide.createIcons();
         }
       }
 
-      function rejectRule(id) {
-        state.pendingRules = state.pendingRules.filter((r) => r.id !== id);
-        renderPendingRules();
-        showToast("Rule rejected");
+      // Colour palette per entity group
+      const ENTITY_COLOURS = {
+        policy:               "bg-indigo-100 text-indigo-700",
+        organization:         "bg-emerald-100 text-emerald-700",
+        region:               "bg-blue-100 text-blue-700",
+        rule:                 "bg-amber-100 text-amber-700",
+        attendance_log:       "bg-orange-100 text-orange-700",
+        point_history:        "bg-purple-100 text-purple-700",
+        alert:                "bg-red-100 text-red-700",
+        other_relevant_terms: "bg-slate-100 text-slate-600",
+      };
+
+      const ENTITY_LABELS = {
+        policy:               "Policy",
+        organization:         "Organization",
+        region:               "Region",
+        rule:                 "Rule",
+        attendance_log:       "Attendance Log",
+        point_history:        "Point History",
+        alert:                "Alert",
+        other_relevant_terms: "Other Terms",
+      };
+
+      function renderAnalysisResults(data) {
+        // ── Keywords section ──────────────────────────────────────────────
+        const kw = data.keywords || {};
+        const kwContainer = document.getElementById("keywords-section");
+        const entityOrder = ["policy","organization","region","rule","attendance_log","point_history","alert","other_relevant_terms"];
+
+        kwContainer.innerHTML = entityOrder
+          .filter((entity) => kw[entity] && kw[entity].length > 0)
+          .map((entity) => {
+            const colour = ENTITY_COLOURS[entity];
+            const label  = ENTITY_LABELS[entity];
+            const chips  = kw[entity]
+              .map((term) => `<span class="inline-block ${colour} text-xs px-2 py-1 rounded-full">${term}</span>`)
+              .join(" ");
+            return `
+              <div class="flex items-start gap-3">
+                <span class="text-xs font-semibold text-slate-500 w-32 shrink-0 pt-1">${label}</span>
+                <div class="flex flex-wrap gap-1.5">${chips}</div>
+              </div>`;
+          })
+          .join("");
+
+        // Confidence badge
+        if (kw.confidence_score !== undefined) {
+          const pct = Math.round(kw.confidence_score * 100);
+          kwContainer.innerHTML += `
+            <div class="mt-3 text-xs text-slate-400">Extraction confidence: <span class="font-medium text-slate-600">${pct}%</span></div>`;
+        }
+
+        // ── Plan section ──────────────────────────────────────────────────
+        const plan = data.sql_plan || {};
+        const planContainer = document.getElementById("plan-section");
+        let planHTML = "";
+
+        if (plan.objective) {
+          planHTML += `
+            <div class="bg-slate-50 rounded-xl p-4 mb-4 border border-slate-200">
+              <p class="text-sm text-slate-700"><span class="font-semibold">Objective:</span> ${plan.objective}</p>
+            </div>`;
+        }
+
+        if (plan.tables_required && plan.tables_required.length > 0) {
+          planHTML += `<div class="mb-4">
+            <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Tables Required</p>
+            <div class="space-y-1">`;
+          plan.tables_required.forEach((t) => {
+            planHTML += `<div class="flex items-start gap-2 text-sm">
+              <span class="bg-indigo-50 text-indigo-700 font-mono text-xs px-2 py-0.5 rounded shrink-0">${t.table} (${t.alias})</span>
+              <span class="text-slate-600">${t.purpose}</span>
+            </div>`;
+          });
+          planHTML += `</div></div>`;
+        }
+
+        if (plan.joins && plan.joins.length > 0) {
+          planHTML += `<div class="mb-4">
+            <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Joins</p>
+            <div class="space-y-1">`;
+          plan.joins.forEach((j) => {
+            planHTML += `<div class="text-sm text-slate-600 flex items-center gap-2">
+              <span class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">${j.left}</span>
+              <span class="text-slate-400">→</span>
+              <span class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">${j.right}</span>
+              <span class="text-slate-400 text-xs">ON ${j.condition}</span>
+              <span class="text-xs bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">${j.join_type}</span>
+            </div>`;
+          });
+          planHTML += `</div></div>`;
+        }
+
+        if (plan.where_filters && plan.where_filters.length > 0) {
+          planHTML += `<div class="mb-4">
+            <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Existence Checks</p>
+            <div class="space-y-1">`;
+          plan.where_filters.forEach((f) => {
+            planHTML += `<div class="text-sm text-slate-600 flex items-start gap-2">
+              <span class="font-mono text-xs bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded shrink-0">${f.expression}</span>
+              <span>${f.description}</span>
+              ${f.source_keyword ? `<span class="text-xs text-slate-400 shrink-0">← ${f.source_keyword}</span>` : ""}
+            </div>`;
+          });
+          planHTML += `</div></div>`;
+        }
+
+        if (plan.cte_description) {
+          planHTML += `<div class="mb-4">
+            <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Column Mappings</p>
+            <pre class="text-xs text-slate-600 bg-slate-50 rounded-xl p-4 border border-slate-200 whitespace-pre-wrap">${plan.cte_description}</pre>
+          </div>`;
+        }
+
+        if (plan.confidence_score !== undefined) {
+          const pct = Math.round(plan.confidence_score * 100);
+          planHTML += `<div class="text-xs text-slate-400 mt-2">Plan confidence: <span class="font-medium text-slate-600">${pct}%</span></div>`;
+        }
+
+        planContainer.innerHTML = planHTML || `<p class="text-sm text-slate-400">No plan generated.</p>`;
+        lucide.createIcons();
       }
 
-      function approveAllRules() {
-        state.pendingRules.forEach((rule) => {
-          rule.active = true;
-          state.rules.push(rule);
-        });
-        state.pendingRules = [];
-        renderPendingRules();
-        renderActiveRules();
-        updateStats();
-        showToast("All rules approved");
-      }
-
-      function clearRules() {
-        state.pendingRules = [];
-        renderPendingRules();
-        document.getElementById("rules-preview").classList.add("hidden");
+      function clearAnalysisResults() {
+        document.getElementById("analysis-results").classList.add("hidden");
+        document.getElementById("keywords-section").innerHTML = "";
+        document.getElementById("plan-section").innerHTML = "";
+        const fileInput = document.getElementById("policy-file");
+        if (fileInput) fileInput.value = "";
       }
 
       function renderActiveRules() {

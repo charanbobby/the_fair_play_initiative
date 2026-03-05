@@ -1,7 +1,7 @@
 # Fair Play Initiative — System Architecture
 
-> **Version:** 0.2.0 — Covers the full FPI backend including database layer, REST API, SPA serving,
-> Docker deployment, and AI chatbot integration.
+> **Version:** 0.3.0 — Covers the full FPI backend including database layer, REST API, SPA serving,
+> Docker deployment, AI chatbot integration, and the new Policy Analyzer pipeline.
 
 ---
 
@@ -17,6 +17,7 @@ administrators managing multi-organization, multi-region workforces. Core capabi
 | **Automated CSV processing** | Admins upload a CSV of clock-in/clock-out records. The backend scores each row against the relevant employee's policy rules, writes `AttendanceLog` and `PointHistory` rows, and auto-generates alerts when an employee crosses the 8-point red-flag threshold. |
 | **Manual oversight** | Supervisors can excuse violations, reduce totals by an arbitrary amount, or fully reset an employee's point count. Every override writes an audit trail entry to `PointHistory`. |
 | **AI chatbot** | A pluggable LLM chatbot (mock by default; wires to OpenAI or Anthropic via env var) answers policy questions with per-session conversation memory. |
+| **Policy document analysis** | Upload a PDF, DOCX, or TXT policy document. A 2-node LangGraph pipeline (keyword extraction → SQL ingestion plan) returns structured data mapped to the FPI schema — no database writes. Results are displayed inline on the Policy Management screen. |
 | **Quote drafting stub** | A future-facing endpoint that will extract actionable quotes from uploaded policy documents. Currently returns an empty list with TODO hooks for LLM extraction. |
 
 The system ships as a **single Docker container** (port 7860, Hugging Face Spaces compatible).
@@ -35,7 +36,7 @@ FastAPI — no separate web server or CDN needed.
 | Database (production) | PostgreSQL (swap `DATABASE_URL`) | Replaces SQLite with no code changes |
 | Package manager | `uv` | 10–100× faster than pip; installs into system Python with `--system` |
 | Runtime | `uvicorn[standard]` | ASGI server; production-grade with async worker support |
-| AI/LLM | LangChain + configurable provider | Mock → OpenAI → Anthropic via `LLM_PROVIDER` env var |
+| AI/LLM | LangChain + LangGraph + configurable provider | Mock → OpenAI → Anthropic via `LLM_PROVIDER` env var. Policy analyzer uses ChatOpenAI via OpenRouter. |
 | Validation | Pydantic v2 | Co-located schemas; `model_config = {"from_attributes": True}` for ORM serialization |
 | Frontend | Vanilla JS + Tailwind CSS + Chart.js + Lucide | Served as a static file; no build step required |
 | Container runtime | Docker + Docker Compose | `data/` volume for SQLite persistence; non-root `appuser` |
@@ -74,6 +75,7 @@ FastAPI — no separate web server or CDN needed.
 │  ┌──────────────── /api/v1 Routers ─────────────────────┐ │
 │  │  regions · organizations · policies · rules          │ │
 │  │  employees · attendance · alerts · dashboard         │ │
+│  │  policies/analyze ← LangGraph pipeline              │ │
 │  └──────────────────────────────────────────────────────┘ │
 │                                                            │
 │  Middleware: CORSMiddleware (allow_origins=["*"])          │
@@ -87,6 +89,15 @@ FastAPI — no separate web server or CDN needed.
      │  /data/     │             │   openai        │
      │  (volume)   │             │   anthropic     │
      └─────────────┘             └─────────────────┘
+                                          │
+                                 ┌────────▼────────────┐
+                                 │  OpenRouter API     │
+                                 │  (OPENROUTER_API_KEY│
+                                 │  gpt-4o-mini or     │
+                                 │  LLM_MODEL setting) │
+                                 │  Policy Analyzer    │
+                                 │  only               │
+                                 └─────────────────────┘
 ```
 
 ---
@@ -319,6 +330,47 @@ Organization ◄── Alert (organizationId FK, nullable = platform-wide)
 | `GET` | `/api/v1/policies/{id}` | — | 200, 404 — **includes nested `rules[]`** |
 | `PUT` | `/api/v1/policies/{id}` | — | 200, 404 |
 | `DELETE` | `/api/v1/policies/{id}` | — | 204, 404 — **cascades delete to rules** |
+| `POST` | `/api/v1/policies/analyze` | — | 200, 400, 503 — **policy document analysis (no DB writes)** |
+
+**`POST /api/v1/policies/analyze`** — Upload a policy document and receive structured analysis:
+
+```text
+Request: multipart/form-data — field "file" (PDF / DOCX / TXT)
+
+Response 200 — PolicyAnalysisResponse:
+{
+  "filename": "hr-attendance-policy.pdf",
+  "keywords": {
+    "policy":               ["attendance policy", "effective date", "…"],
+    "organization":         ["Acme Corp", "…"],
+    "region":               ["California", "US-West", "…"],
+    "rule":                 ["late arrival (>7 min)", "no-call absence", "…"],
+    "attendance_log":       ["violation type", "…"],
+    "point_history":        ["accrual", "rolling window", "…"],
+    "alert":                ["red flag", "suspension trigger", "…"],
+    "other_relevant_terms": ["progressive discipline", "…"],
+    "confidence_score": 0.92
+  },
+  "sql_plan": {
+    "objective": "Insert organization, region, policy, and rule rows for this document.",
+    "tables_required": [
+      { "table": "organization", "alias": "o", "purpose": "employer entity" },
+      …
+    ],
+    "joins": [ { "left": "policy", "right": "organization", "condition": "policy.organization_id = organization.id", "join_type": "INNER" }, … ],
+    "where_filters": [ { "description": "org exists check", "expression": "organization.name = 'Acme Corp'", "source_keyword": "Acme Corp" }, … ],
+    "uses_cte": false,
+    "cte_description": "organization.name = 'Acme Corp', region.code = 'US-W', …",
+    "confidence_score": 0.88
+  }
+}
+
+Response 400 — Unsupported file type or empty file
+Response 503 — OPENROUTER_API_KEY not configured
+Response 500 — LLM or pipeline error
+```
+
+No database writes are performed. The response is display-only for admin review.
 
 #### Rules
 
@@ -475,6 +527,20 @@ the_fair_play_initiative/
 │   ├── quotes.py          draft_quotes() stub. Returns {draft_quotes: [], notes: ["..."]}.
 │   │                      Has TODO comment for LLM-based PDF extraction.
 │   │
+│   ├── prompts/           LLM prompt files — one readable Markdown file per prompt.
+│   │   ├── 01_keyword_extraction.md   System prompt: extract schema-mapped keywords from policy text.
+│   │   ├── 02_sql_query_plan.md       System prompt: devise INSERT plan from keywords.
+│   │   │                              Contains {{schema}} placeholder (injected at load time).
+│   │   └── schema.json                FPI table schema (9 tables) used in the plan prompt.
+│   │
+│   ├── services/
+│   │   └── policy_analyzer.py         LangGraph pipeline (2 nodes: node_extract → node_plan).
+│   │                                   Loads prompts from app/prompts/ at module import.
+│   │                                   Extracts text from PDF (pypdf), DOCX (python-docx), TXT.
+│   │                                   Uses ChatOpenAI via OpenRouter (OPENROUTER_API_KEY).
+│   │                                   Public API: async analyze_policy_document(filename, bytes).
+│   │                                   No database writes — returns PolicyAnalysisResponse.
+│   │
 │   ├── static/
 │   │   └── index.html     Full SPA. Tailwind (CDN), Chart.js (CDN), Lucide (CDN).
 │   │                      On DOMContentLoaded: calls loadDataFromAPI() which fetches
@@ -482,12 +548,15 @@ the_fair_play_initiative/
 │   │                      openEmployeeModal() fetches fresh detail on each open.
 │   │                      applyOverride() POSTs to /employees/{id}/override.
 │   │                      processAttendanceFile() POSTs CSV as multipart to /attendance/upload.
+│   │                      processPolicyFile() POSTs to /api/v1/policies/analyze; renders
+│   │                      keyword chips + plan in #analysis-results panel.
 │   │                      Falls back gracefully if API unreachable (renders empty UI).
 │   │
 │   └── routers/
 │       ├── regions.py         Full CRUD. Uses db.get(Region, id) for PK lookups.
 │       ├── organizations.py   CRUD + manages org.regions M2M list on create/update.
 │       ├── policies.py        CRUD with org/region filter. Cascade-deletes rules on DELETE.
+│       │                      POST /analyze: accepts UploadFile → calls policy_analyzer service.
 │       ├── rules.py           CRUD + PATCH /{id}/toggle endpoint. Filters by policy_id.
 │       ├── employees.py       CRUD + GET /{id}/history + POST /{id}/override.
 │       │                      Override logic: excuse mutates PointHistory.status → Excused.
@@ -649,7 +718,52 @@ Admin opens employee modal → selects override type → clicks Apply
             └─ db.commit() → return EmployeeDetailResponse (with refreshed history[])
 ```
 
-### 7.5 Chatbot Request
+### 7.5 Policy Document Analysis
+
+```text
+User selects PDF/DOCX/TXT on Policy Management tab
+  └─ processPolicyFile(file)   [app/static/index.html]
+       │
+       ├─ Shows spinner in dropzone
+       ├─ POST /api/v1/policies/analyze  (multipart/form-data)
+       │
+       └─ Backend: policies.py → analyze_policy()
+            │
+            ├─ Validate extension (.pdf / .docx / .doc / .txt)
+            ├─ Read file bytes
+            └─ await analyze_policy_document(filename, bytes)
+                 │   [app/services/policy_analyzer.py]
+                 │
+                 ├─ Extract text:
+                 │    PDF  → pypdf.PdfReader
+                 │    DOCX → python-docx Document
+                 │    TXT  → utf-8 decode
+                 │
+                 ├─ LangGraph invoke:  START → node_extract → node_plan → END
+                 │
+                 ├─ node_extract:
+                 │    LLM: ChatOpenAI (OpenRouter, gpt-4o-mini)
+                 │    System: app/prompts/01_keyword_extraction.md
+                 │    Human:  pdf_text[:4000]
+                 │    Output: KeywordExtraction (structured, 8 entity groups + confidence)
+                 │
+                 └─ node_plan:
+                      LLM: ChatOpenAI (OpenRouter, gpt-4o-mini)
+                      System: app/prompts/02_sql_query_plan.md + schema.json
+                      Human:  formatted keywords + pdf_text[:2000]
+                      Output: SQLQueryPlan (tables, joins, filters, cte_description + confidence)
+
+Frontend on success:
+  ├─ renderAnalysisResults(data)
+  │    ├─ #keywords-section: color-coded chips per entity group
+  │    └─ #plan-section: objective, tables, joins, existence checks, column mappings
+  ├─ Show #analysis-results panel
+  └─ showToast("Analysis complete!")
+
+No database writes at any stage.
+```
+
+### 7.6 Chatbot Request
 
 ```
 POST /chat  { session_id, message }
@@ -689,7 +803,7 @@ All config is loaded at import time in `app/config.py`. The app starts safely wi
 | `LLM_API_KEY` | _(empty)_ | Generic — provider-specific keys below take precedence |
 | `OPENAI_API_KEY` | _(empty)_ | Used when `LLM_PROVIDER=openai` |
 | `ANTHROPIC_API_KEY` | _(empty)_ | Used when `LLM_PROVIDER=anthropic` |
-| `OPENROUTER_API_KEY` | _(empty)_ | Not yet wired — placeholder for future OpenRouter support |
+| `OPENROUTER_API_KEY` | _(empty)_ | **Required for Policy Analyzer.** Used by `app/services/policy_analyzer.py` as the LLM API key (`base_url=https://openrouter.ai/api/v1`). If unset, `/policies/analyze` returns 503. |
 | `APP_HOST` | `0.0.0.0` | Rarely needs changing inside a container |
 | `APP_PORT` | `7860` | Must match Dockerfile `EXPOSE` and compose `ports` |
 | `ARIZE_API_KEY` | _(empty)_ | Set to enable Arize Phoenix distributed tracing |
@@ -814,9 +928,9 @@ isolated, stateless, and fast — no Docker required for the test suite.
 | **Authentication** | JWT middleware (FastAPI-Users or custom). Bind `session_id` to authenticated user. Role-based: Admin vs. Employee view. |
 | **LangGraph orchestration** | Replace linear `run_chain()` with a stateful graph agent: `retrieve → reason → respond` nodes with tool calling (web search via Tavily, policy DB lookup). |
 | **RAG — Policy ingestion** | Upload PDF policy handbooks. LangChain PDF loader + text splitter → embeddings → vector store (Chroma/Pinecone). Retriever node feeds context into chatbot. |
-| **Rule extraction from PDFs** | Wire `/quotes/draft` to an LLM extraction prompt that produces structured `Rule` create-payloads from uploaded policy documents. |
+| ~~Rule extraction from PDFs~~ | ✅ **Done (v0.3.0)** — `/api/v1/policies/analyze` uses a 2-node LangGraph pipeline to extract keywords and produce a structured ingestion plan from uploaded policy documents. |
 | **Streaming chat replies** | Switch `/chat` to `StreamingResponse` using LangGraph's `.astream()`. |
 | **Scheduled point resets** | Cron job (APScheduler or Celery) to zero employee points at end of rolling window (`next_reset` date). |
 | **Employee self-service portal** | Separate read-only view for employees to see their own history. |
 | **Excel upload support** | Extend `attendance/upload` to accept `.xlsx` via `openpyxl`. |
-| **OpenRouter gateway** | Route all LLM calls through OpenRouter for multi-model A/B testing. |
+| ~~OpenRouter gateway~~ | ✅ **Done (v0.3.0)** — Policy Analyzer uses `ChatOpenAI` with `base_url=https://openrouter.ai/api/v1` and `OPENROUTER_API_KEY`. Chatbot still uses provider-direct; consolidation is a future item. |

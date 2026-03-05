@@ -317,3 +317,64 @@ class DashboardStats(BaseModel):
     active_violations: int
     red_flags: int
     total_organizations: int
+
+
+# ===========================================================================
+# Policy Analyzer — keyword extraction + ingestion plan models
+# ===========================================================================
+
+class KeywordExtraction(BaseModel):
+    policy: list[str] = Field(default_factory=list)
+    organization: list[str] = Field(default_factory=list)
+    region: list[str] = Field(default_factory=list)
+    rule: list[str] = Field(default_factory=list)
+    attendance_log: list[str] = Field(default_factory=list)
+    point_history: list[str] = Field(default_factory=list)
+    alert: list[str] = Field(default_factory=list)
+    other_relevant_terms: list[str] = Field(default_factory=list)
+    confidence_score: float = 0.0
+
+
+class TableUsage(BaseModel):
+    table: str
+    alias: str
+    purpose: str
+
+
+class JoinStep(BaseModel):
+    left: str
+    right: str
+    condition: str
+    join_type: str
+
+
+class FilterCondition(BaseModel):
+    description: str
+    expression: str
+    source_keyword: str
+
+
+class AggregationStep(BaseModel):
+    column_name: str
+    expression: str
+    purpose: str
+
+
+class SQLQueryPlan(BaseModel):
+    objective: str = ""
+    tables_required: list[TableUsage] = Field(default_factory=list)
+    joins: list[JoinStep] = Field(default_factory=list)
+    where_filters: list[FilterCondition] = Field(default_factory=list)
+    grouping_columns: list[str] = Field(default_factory=list)
+    aggregations: list[AggregationStep] = Field(default_factory=list)
+    having_filters: list[FilterCondition] = Field(default_factory=list)
+    output_columns: list[str] = Field(default_factory=list)
+    uses_cte: bool = False
+    cte_description: Optional[str] = None
+    confidence_score: float = 0.0
+
+
+class PolicyAnalysisResponse(BaseModel):
+    filename: str
+    keywords: KeywordExtraction
+    sql_plan: SQLQueryPlan
