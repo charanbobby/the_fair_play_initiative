@@ -324,54 +324,89 @@ class DashboardStats(BaseModel):
 # ===========================================================================
 
 class KeywordExtraction(BaseModel):
-    policy: list[str] = Field(default_factory=list)
-    organization: list[str] = Field(default_factory=list)
-    region: list[str] = Field(default_factory=list)
-    rule: list[str] = Field(default_factory=list)
-    attendance_log: list[str] = Field(default_factory=list)
-    point_history: list[str] = Field(default_factory=list)
-    alert: list[str] = Field(default_factory=list)
-    other_relevant_terms: list[str] = Field(default_factory=list)
-    confidence_score: float = 0.0
+    policy: list[str] = Field(default_factory=list, description="Policy-level keywords: codes, names, framework attributes, accrual model type, and scope.")
+    organization: list[str] = Field(default_factory=list, description="Organization names and identifiers.")
+    region: list[str] = Field(default_factory=list, description="Region names, jurisdictions, and applicable labor laws.")
+    rule: list[str] = Field(default_factory=list, description="Rule names, tier definitions, conditions, point thresholds, and escalation criteria.")
+    attendance_log: list[str] = Field(default_factory=list, description="Attendance event types, violation definitions, scheduled vs actual time terms, and log statuses.")
+    point_history: list[str] = Field(default_factory=list, description="Point accrual, expiration, active status, and reason classification terms.")
+    alert: list[str] = Field(default_factory=list, description="Alert types, automatic trigger conditions, escalation actions, and documentation levels.")
+    other_relevant_terms: list[str] = Field(default_factory=list, description="Terms relevant to the policy but not directly mappable to a specific schema element.")
+    confidence_score: float = Field(default=0.0, description="Confidence score of the extraction between 0.0 and 1.0.")
 
 
 class TableUsage(BaseModel):
-    table: str
-    alias: str
-    purpose: str
+    table: str = Field(description="Exact table name from the FPI schema.")
+    alias: str = Field(description="Short alias used in the SQL query (e.g. 'o' for organization).")
+    purpose: str = Field(description="One sentence: why this table is needed for this query.")
 
 
 class JoinStep(BaseModel):
-    left: str
-    right: str
-    condition: str
-    join_type: str
+    left: str = Field(description="Left-side table alias or name (child table holding the FK).")
+    right: str = Field(description="Right-side table alias or name (parent table holding the PK).")
+    condition: str = Field(description="FK dependency expression, e.g. 'organization_region.organization_id = organization.id'.")
+    join_type: str = Field(description="JOIN type: INNER, LEFT, RIGHT, or FULL.")
 
 
 class FilterCondition(BaseModel):
-    description: str
-    expression: str
-    source_keyword: str
+    description: str = Field(description="Plain-English description of what this filter does.")
+    expression: str = Field(description="The natural-key expression for the existence check.")
+    source_keyword: str = Field(description="The extracted keyword that motivated this filter.")
 
 
 class AggregationStep(BaseModel):
-    column_name: str
-    expression: str
-    purpose: str
+    column_name: str = Field(description="Output column alias for this aggregation.")
+    expression: str = Field(description="The aggregate SQL expression.")
+    purpose: str = Field(description="What business question this aggregation answers.")
 
 
 class SQLQueryPlan(BaseModel):
-    objective: str = ""
-    tables_required: list[TableUsage] = Field(default_factory=list)
-    joins: list[JoinStep] = Field(default_factory=list)
-    where_filters: list[FilterCondition] = Field(default_factory=list)
-    grouping_columns: list[str] = Field(default_factory=list)
-    aggregations: list[AggregationStep] = Field(default_factory=list)
-    having_filters: list[FilterCondition] = Field(default_factory=list)
-    output_columns: list[str] = Field(default_factory=list)
-    uses_cte: bool = False
-    cte_description: Optional[str] = None
-    confidence_score: float = 0.0
+    objective: str = Field(
+        default="",
+        description="One sentence: what does this SQL operation accomplish? "
+                    "For ingestion plans, describe what data is being inserted and into which tables. "
+                    "Do NOT describe downstream analytics or reporting use cases.",
+    )
+    tables_required: list[TableUsage] = Field(
+        default_factory=list,
+        description="All tables needed, with aliases and purpose.",
+    )
+    joins: list[JoinStep] = Field(
+        default_factory=list,
+        description="FK dependency chains: child table (left) → parent table (right), in dependency order.",
+    )
+    where_filters: list[FilterCondition] = Field(
+        default_factory=list,
+        description="Existence checks using natural keys, each tied to a source keyword.",
+    )
+    grouping_columns: list[str] = Field(
+        default_factory=list,
+        description="Column references to include in GROUP BY. Leave empty for ingestion plans.",
+    )
+    aggregations: list[AggregationStep] = Field(
+        default_factory=list,
+        description="All aggregate columns to compute. Leave empty for ingestion plans.",
+    )
+    having_filters: list[FilterCondition] = Field(
+        default_factory=list,
+        description="Post-aggregation HAVING filters. Leave empty for ingestion plans.",
+    )
+    output_columns: list[str] = Field(
+        default_factory=list,
+        description="Final SELECT column names or aliases. Leave empty for ingestion plans.",
+    )
+    uses_cte: bool = Field(
+        default=False,
+        description="True if the plan requires CTE-style ID chaining across INSERT steps.",
+    )
+    cte_description: Optional[str] = Field(
+        default=None,
+        description="Complete procedural plan: per-table column mappings, all rule row enumerations, ID chaining summary, and operational reminders.",
+    )
+    confidence_score: float = Field(
+        default=0.0,
+        description="Confidence in the plan's correctness and completeness, 0.0–1.0.",
+    )
 
 
 class PolicyAnalysisResponse(BaseModel):
