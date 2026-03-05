@@ -405,7 +405,10 @@ class SQLQueryPlan(BaseModel):
     )
     confidence_score: float = Field(
         default=0.0,
-        description="Confidence in the plan's correctness and completeness, 0.0–1.0.",
+        description="Confidence in the plan's correctness and completeness, 0.0–1.0. "
+                    "Deduct for placeholder values, ambiguous clauses, unclear thresholds, "
+                    "and incomplete source text. Typical range: 0.60–0.90. "
+                    "1.0 means zero ambiguity — this is rare.",
     )
 
 
