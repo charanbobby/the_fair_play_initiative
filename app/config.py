@@ -25,6 +25,11 @@ class Settings:
     # Database
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./fpi.db")
 
+    @property
+    def IS_PLAYGROUND(self) -> bool:
+        """Playground mode when using SQLite (default). Production uses PostgreSQL."""
+        return self.DATABASE_URL.startswith("sqlite")
+
     # Server
     APP_HOST: str = os.getenv("APP_HOST", "0.0.0.0")
     APP_PORT: int = int(os.getenv("APP_PORT", "7860"))

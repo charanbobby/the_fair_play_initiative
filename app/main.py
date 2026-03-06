@@ -62,6 +62,7 @@ from app.routers import (
     alerts,
     dashboard,
     feedback,
+    playground,
 )
 
 logger = app_logging.logger
@@ -105,7 +106,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Fair Play Initiative — API",
     description="FastAPI backend for the Fair Play Initiative attendance management platform.",
-    version="0.6.7",
+    version="0.6.8",
     lifespan=lifespan,
     redirect_slashes=False,
 )
@@ -142,6 +143,7 @@ app.include_router(attendance.router, prefix=API_PREFIX)
 app.include_router(alerts.router, prefix=API_PREFIX)
 app.include_router(dashboard.router, prefix=API_PREFIX)
 app.include_router(feedback.router, prefix=API_PREFIX)
+app.include_router(playground.router, prefix=API_PREFIX)
 
 
 # ---------------------------------------------------------------------------
@@ -181,7 +183,8 @@ async def serve_spa():
 @app.get("/health", response_model=HealthResponse, tags=["infra"])
 async def health() -> HealthResponse:
     """Liveness probe — returns 200 + {"status": "ok"} if the server is up."""
-    return HealthResponse(status="ok")
+    from app.config import settings as _cfg
+    return HealthResponse(status="ok", is_playground=_cfg.IS_PLAYGROUND)
 
 
 @app.post("/chat", response_model=ChatResponse, tags=["chat"])

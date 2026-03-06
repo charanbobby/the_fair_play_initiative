@@ -113,7 +113,8 @@
               <h1 class="text-xl font-bold">The Fair Play Initiative</h1>
               <p class="text-xs text-slate-400">
                 Balanced Attendance Management
-                <span class="ml-2 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.6.7</span>
+                <span class="ml-2 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.6.8</span>
+                <span id="playground-badge" class="ml-1 bg-amber-500 text-amber-50 text-xs font-mono px-1.5 py-0.5 rounded hidden">Playground</span>
               </p>
             </div>
           </div>
@@ -436,6 +437,9 @@
             <span class="text-xs font-medium text-slate-400 uppercase tracking-wide">or paste text</span>
             <div class="flex-1 border-t border-slate-200"></div>
           </div>
+
+          <!-- Sample Policy Buttons (Playground only — populated by JS) -->
+          <div id="sample-policy-buttons" class="hidden mb-4"></div>
 
           <!-- Paste Text Zone -->
           <div class="relative">
@@ -1529,6 +1533,7 @@
       document.addEventListener("DOMContentLoaded", async () => {
         populateModelSelectors();
         await loadDataFromAPI();
+        await checkPlaygroundStatus();
         setupDragAndDrop();
         populateOrganizationFilter();
         renderDashboard();
@@ -3589,6 +3594,151 @@
         showToast("3 new notifications");
       }
 
+      // ---------------------------------------------------------------
+      // Playground Mode
+      // ---------------------------------------------------------------
+      let _isPlayground = false;
+      let _samplePolicies = [];
+
+      async function checkPlaygroundStatus() {
+        try {
+          const res = await fetch(`${API_BASE}/playground/status`);
+          if (!res.ok) return;
+          const data = await res.json();
+          _isPlayground = data.is_playground;
+          _samplePolicies = data.sample_policies || [];
+          if (_isPlayground) {
+            showPlaygroundBanner();
+            addSamplePolicyButtons();
+            const badge = document.getElementById("playground-badge");
+            if (badge) badge.classList.remove("hidden");
+          }
+        } catch (err) {
+          console.warn("Playground status check failed:", err);
+        }
+      }
+
+      function showPlaygroundBanner() {
+        const banner = document.createElement("div");
+        banner.id = "playground-banner";
+        banner.className = "bg-amber-50 border-b-2 border-amber-300";
+        banner.innerHTML = `
+          <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div class="flex items-start gap-3">
+              <div class="bg-amber-100 p-2 rounded-lg flex-shrink-0 mt-0.5">
+                <i data-lucide="flask-conical" class="w-5 h-5 text-amber-600"></i>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 mb-1.5">
+                  <span class="text-sm font-bold text-amber-800">Playground Mode</span>
+                  <span class="bg-amber-200 text-amber-800 text-xs font-mono px-2 py-0.5 rounded-full">SQLite</span>
+                </div>
+                <div class="text-xs text-amber-700 leading-relaxed space-y-1">
+                  <p>You are using a <strong>local SQLite database</strong> for experimentation. Here are the rules:</p>
+                  <ul class="list-disc list-inside ml-1 space-y-0.5">
+                    <li><strong>Ephemeral data</strong> — all data is lost when the server restarts or the Space rebuilds.</li>
+                    <li><strong>Safe to experiment</strong> — create, edit, and delete organizations, policies, employees, and rules freely.</li>
+                    <li><strong>Reset Data</strong> — clears everything back to an empty database with fresh tables.</li>
+                    <li><strong>Load Seed Data</strong> — resets and populates the database with demo organizations, employees, policies, and attendance history.</li>
+                    <li><strong>Sample policies</strong> — use the "Try a sample policy" buttons in the Policy tab to test the analyzer without uploading a file.</li>
+                  </ul>
+                </div>
+                <div class="flex items-center gap-2 mt-3">
+                  <button onclick="resetPlayground()"
+                    class="text-xs bg-white border border-amber-300 text-amber-700 px-3 py-1.5 rounded-lg hover:bg-amber-50 transition font-medium flex items-center gap-1">
+                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Reset Data
+                  </button>
+                  <button onclick="seedPlayground()"
+                    class="text-xs bg-amber-600 text-white px-3 py-1.5 rounded-lg hover:bg-amber-700 transition font-medium flex items-center gap-1">
+                    <i data-lucide="database" class="w-3.5 h-3.5"></i> Load Seed Data
+                  </button>
+                </div>
+              </div>
+              <button onclick="document.getElementById('playground-banner').classList.add('hidden')"
+                class="text-amber-400 hover:text-amber-600 flex-shrink-0 p-1">
+                <i data-lucide="x" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+        `;
+        const nav = document.querySelector("nav");
+        nav.parentNode.insertBefore(banner, nav.nextSibling);
+        lucide.createIcons();
+      }
+
+      async function resetPlayground() {
+        if (!confirm("This will delete ALL data in the Playground and recreate empty tables.\n\nContinue?")) return;
+        try {
+          const res = await fetch(`${API_BASE}/playground/reset`, { method: "POST" });
+          if (!res.ok) throw new Error("Reset failed");
+          const data = await res.json();
+          showToast(data.message);
+          await loadDataFromAPI();
+          renderDashboard();
+          renderActiveRules();
+        } catch (err) {
+          showToast("Reset failed: " + err.message);
+        }
+      }
+
+      async function seedPlayground() {
+        try {
+          const btn = event && event.target ? event.target.closest("button") : null;
+          if (btn) { btn.disabled = true; btn.textContent = "Loading…"; }
+          const res = await fetch(`${API_BASE}/playground/seed`, { method: "POST" });
+          if (!res.ok) throw new Error("Seed failed");
+          const data = await res.json();
+          showToast(data.message);
+          await loadDataFromAPI();
+          renderDashboard();
+          renderActiveRules();
+          if (btn) { btn.disabled = false; btn.innerHTML = '<i data-lucide="database" class="w-3.5 h-3.5"></i> Load Seed Data'; lucide.createIcons(); }
+        } catch (err) {
+          showToast("Seed failed: " + err.message);
+        }
+      }
+
+      function addSamplePolicyButtons() {
+        if (_samplePolicies.length === 0) return;
+        const container = document.getElementById("sample-policy-buttons");
+        if (!container) return;
+        container.classList.remove("hidden");
+        container.innerHTML = `
+          <p class="text-xs font-medium text-slate-500 mb-2 flex items-center gap-1">
+            <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+            Try a sample policy:
+          </p>
+          <div class="flex flex-wrap gap-2">
+            ${_samplePolicies.map(p => `
+              <button onclick="loadSamplePolicy('${p.id}')"
+                class="text-xs bg-indigo-50 text-indigo-600 border border-indigo-200 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition font-medium"
+                title="${p.description}">
+                ${p.name}
+              </button>
+            `).join("")}
+          </div>
+        `;
+        lucide.createIcons();
+      }
+
+      async function loadSamplePolicy(policyId) {
+        try {
+          // Fetch full text (status endpoint only has metadata)
+          const res = await fetch(`${API_BASE}/playground/sample-policies`);
+          if (!res.ok) throw new Error("Failed to load sample policies");
+          const policies = await res.json();
+          const policy = policies.find(p => p.id === policyId);
+          if (!policy) { showToast("Sample policy not found"); return; }
+
+          const textarea = document.getElementById("policy-text");
+          textarea.value = policy.text;
+          textarea.scrollIntoView({ behavior: "smooth", block: "center" });
+          showToast("Loaded: " + policy.name + " — click Analyse Text to run");
+        } catch (err) {
+          showToast("Failed to load sample: " + err.message);
+        }
+      }
+
       // Close modals on outside click
       document.querySelectorAll(".modal-overlay").forEach((modal) => {
         modal.addEventListener("click", (e) => {
@@ -3596,6 +3746,5 @@
         });
       });
     </script>
-    <script src="https://deepsite.hf.co/deepsite-badge.js"></script>
   </body>
 </html>

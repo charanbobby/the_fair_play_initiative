@@ -18,6 +18,7 @@ import uuid
 
 class HealthResponse(BaseModel):
     status: str = "ok"
+    is_playground: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -526,6 +527,17 @@ class ModelRatingStats(BaseModel):
     good_pct: float = 0.0
     partial_pct: float = 0.0
     bad_pct: float = 0.0
+
+
+# ---------------------------------------------------------------------------
+# Playground
+# ---------------------------------------------------------------------------
+
+class PlaygroundStatus(BaseModel):
+    is_playground: bool
+    db_engine: str
+    record_counts: dict
+    sample_policies: list[dict]
 
 
 class PolicyAnalysisResponse(BaseModel):
