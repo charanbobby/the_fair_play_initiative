@@ -412,9 +412,19 @@ class SQLQueryPlan(BaseModel):
     )
 
 
+class TokenUsage(BaseModel):
+    extract_prompt: int = 0
+    extract_completion: int = 0
+    extract_total: int = 0
+    plan_prompt: int = 0
+    plan_completion: int = 0
+    plan_total: int = 0
+
+
 class PolicyAnalysisResponse(BaseModel):
     filename: str
     keywords: KeywordExtraction
     sql_plan: SQLQueryPlan
     formatted_keywords: str = Field(default="", description="Plain-text formatted keywords (matches notebook output).")
     formatted_plan: str = Field(default="", description="Plain-text formatted plan (matches notebook output).")
+    token_usage: TokenUsage | None = Field(default=None, description="Token usage per pipeline step.")

@@ -21,7 +21,7 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
 
 from app.config import settings
-from app.schemas import KeywordExtraction, PolicyAnalysisResponse, SQLQueryPlan
+from app.schemas import KeywordExtraction, PolicyAnalysisResponse, SQLQueryPlan, TokenUsage
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -65,6 +65,8 @@ class FPIState(TypedDict):
     model_plan: str | None
     keywords: KeywordExtraction | None
     sql_plan: SQLQueryPlan | None
+    extract_tokens: dict | None
+    plan_tokens: dict | None
     error: str | None
 
 
@@ -72,18 +74,32 @@ class FPIState(TypedDict):
 # Graph nodes
 # ---------------------------------------------------------------------------
 
+def _extract_token_usage(raw_msg) -> dict:
+    """Pull token counts from an AIMessage's usage_metadata."""
+    usage = getattr(raw_msg, "usage_metadata", None) or {}
+    return {
+        "prompt": usage.get("input_tokens", 0),
+        "completion": usage.get("output_tokens", 0),
+        "total": usage.get("total_tokens", 0),
+    }
+
+
 def node_extract(state: FPIState) -> dict:
     """Categorise policy keywords into schema-mapped groups."""
-    model = _build_model(state.get("model_extract")).with_structured_output(KeywordExtraction)
-    result = model.invoke([
+    model = _build_model(state.get("model_extract")).with_structured_output(
+        KeywordExtraction, include_raw=True
+    )
+    raw_result = model.invoke([
         SystemMessage(content=_KEYWORD_SYSTEM_MSG),
         HumanMessage(content=state["pdf_text"]),
     ])
+    result = raw_result["parsed"]
+    tokens = _extract_token_usage(raw_result.get("raw"))
     # Post-process: enforce realistic confidence
     if result.confidence_score >= 1.0:
         result.confidence_score = 0.85
     result.confidence_score = round(min(result.confidence_score, 0.95), 2)
-    return {"keywords": result}
+    return {"keywords": result, "extract_tokens": tokens}
 
 
 def _adjust_confidence(score: float, has_placeholders: bool) -> float:
@@ -102,7 +118,9 @@ def node_plan(state: FPIState) -> dict:
     if not state.get("keywords"):
         return {"error": "node_plan: no keywords in state"}
 
-    model = _build_model(state.get("model_plan")).with_structured_output(SQLQueryPlan)
+    model = _build_model(state.get("model_plan")).with_structured_output(
+        SQLQueryPlan, include_raw=True
+    )
     human_msg = (
         "Devise an ingestion plan for the following keywords extracted from the "
         "attendance policy document. The plan must describe how to INSERT this "
@@ -110,16 +128,18 @@ def node_plan(state: FPIState) -> dict:
         f"## Extracted Keywords\n\n{_format_keywords(state['keywords'])}\n\n"
         f"## Policy Document (for context)\n\n{state['pdf_text']}"
     )
-    result = model.invoke([
+    raw_result = model.invoke([
         SystemMessage(content=_PLAN_SYSTEM_MSG),
         HumanMessage(content=human_msg),
     ])
+    result = raw_result["parsed"]
+    tokens = _extract_token_usage(raw_result.get("raw"))
     # Post-process: enforce realistic confidence scores
     has_placeholders = bool(
         result.cte_description and "placeholder" in result.cte_description.lower()
     )
     result.confidence_score = _adjust_confidence(result.confidence_score, has_placeholders)
-    return {"sql_plan": result}
+    return {"sql_plan": result, "plan_tokens": tokens}
 
 
 # ---------------------------------------------------------------------------
@@ -280,6 +300,8 @@ async def analyze_policy_document(
         "model_plan": model_plan or None,
         "keywords": None,
         "sql_plan": None,
+        "extract_tokens": None,
+        "plan_tokens": None,
         "error": None,
     }
 
@@ -294,10 +316,21 @@ async def analyze_policy_document(
 
     kw = final_state["keywords"]
     plan = final_state["sql_plan"]
+    et = final_state.get("extract_tokens") or {}
+    pt = final_state.get("plan_tokens") or {}
+    token_usage = TokenUsage(
+        extract_prompt=et.get("prompt", 0),
+        extract_completion=et.get("completion", 0),
+        extract_total=et.get("total", 0),
+        plan_prompt=pt.get("prompt", 0),
+        plan_completion=pt.get("completion", 0),
+        plan_total=pt.get("total", 0),
+    )
     return PolicyAnalysisResponse(
         filename=filename,
         keywords=kw,
         sql_plan=plan,
         formatted_keywords=_format_keywords(kw) if kw else "",
         formatted_plan=_format_plan(plan) if plan else "",
+        token_usage=token_usage,
     )

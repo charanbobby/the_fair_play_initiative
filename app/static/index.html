@@ -113,7 +113,7 @@
               <h1 class="text-xl font-bold">The Fair Play Initiative</h1>
               <p class="text-xs text-slate-400">
                 Balanced Attendance Management
-                <span class="ml-2 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.5.9</span>
+                <span class="ml-2 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.6.0</span>
               </p>
             </div>
           </div>
@@ -377,14 +377,16 @@
                 <i data-lucide="scan-search" class="w-3.5 h-3.5 inline -mt-0.5"></i>
                 Extraction Model
               </label>
-              <select id="llm-model-extract" class="llm-model-select border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white w-full"></select>
+              <select id="llm-model-extract" class="llm-model-select border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white w-full" onchange="showModelCard('extract')"></select>
+              <div id="model-card-extract" class="hidden mt-1 px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs text-slate-500"></div>
             </div>
             <div>
               <label for="llm-model-plan" class="block text-xs font-medium text-slate-500 mb-1">
                 <i data-lucide="list-tree" class="w-3.5 h-3.5 inline -mt-0.5"></i>
                 Planning Model
               </label>
-              <select id="llm-model-plan" class="llm-model-select border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white w-full"></select>
+              <select id="llm-model-plan" class="llm-model-select border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white w-full" onchange="showModelCard('plan')"></select>
+              <div id="model-card-plan" class="hidden mt-1 px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs text-slate-500"></div>
             </div>
             <div class="relative" title="Coming soon — SQL generation node not yet wired">
               <label for="llm-model-sql" class="block text-xs font-medium text-slate-400 mb-1">
@@ -450,13 +452,33 @@
               </div>
             </div>
 
+            <!-- Token usage summary -->
+            <div id="token-usage" class="hidden mb-4 flex flex-wrap gap-4 text-xs">
+              <div class="flex items-center gap-1.5 bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg">
+                <i data-lucide="hash" class="w-3.5 h-3.5"></i>
+                Extraction: <span id="tokens-extract" class="font-mono font-semibold">—</span> tokens
+              </div>
+              <div class="flex items-center gap-1.5 bg-violet-50 text-violet-700 px-3 py-1.5 rounded-lg">
+                <i data-lucide="hash" class="w-3.5 h-3.5"></i>
+                Planning: <span id="tokens-plan" class="font-mono font-semibold">—</span> tokens
+              </div>
+            </div>
+
             <!-- Rich view (default) -->
             <div id="rich-view">
               <!-- Extracted Keywords -->
               <div class="mb-6">
-                <h5 class="text-sm font-semibold text-slate-600 uppercase tracking-wide mb-3">
-                  Extracted Keywords
-                </h5>
+                <div class="flex items-center justify-between mb-3">
+                  <h5 class="text-sm font-semibold text-slate-600 uppercase tracking-wide">
+                    Extracted Keywords
+                  </h5>
+                  <div id="feedback-extract" class="flex items-center gap-1" data-step="extract">
+                    <span class="text-xs text-slate-400 mr-1">Rate:</span>
+                    <button onclick="submitFeedback('extract','good')" class="feedback-btn px-2 py-0.5 rounded text-xs border border-slate-200 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-700 transition" title="Good">Good</button>
+                    <button onclick="submitFeedback('extract','partial')" class="feedback-btn px-2 py-0.5 rounded text-xs border border-slate-200 hover:bg-amber-50 hover:border-amber-300 hover:text-amber-700 transition" title="Partial">Partial</button>
+                    <button onclick="submitFeedback('extract','bad')" class="feedback-btn px-2 py-0.5 rounded text-xs border border-slate-200 hover:bg-red-50 hover:border-red-300 hover:text-red-700 transition" title="Bad">Bad</button>
+                  </div>
+                </div>
                 <div id="keywords-section" class="space-y-3">
                   <!-- Populated by JS -->
                 </div>
@@ -467,9 +489,17 @@
 
               <!-- Query Plan -->
               <div>
-                <h5 class="text-sm font-semibold text-slate-600 uppercase tracking-wide mb-3">
-                  SQL Ingestion Plan
-                </h5>
+                <div class="flex items-center justify-between mb-3">
+                  <h5 class="text-sm font-semibold text-slate-600 uppercase tracking-wide">
+                    SQL Ingestion Plan
+                  </h5>
+                  <div id="feedback-plan" class="flex items-center gap-1" data-step="plan">
+                    <span class="text-xs text-slate-400 mr-1">Rate:</span>
+                    <button onclick="submitFeedback('plan','good')" class="feedback-btn px-2 py-0.5 rounded text-xs border border-slate-200 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-700 transition" title="Good">Good</button>
+                    <button onclick="submitFeedback('plan','partial')" class="feedback-btn px-2 py-0.5 rounded text-xs border border-slate-200 hover:bg-amber-50 hover:border-amber-300 hover:text-amber-700 transition" title="Partial">Partial</button>
+                    <button onclick="submitFeedback('plan','bad')" class="feedback-btn px-2 py-0.5 rounded text-xs border border-slate-200 hover:bg-red-50 hover:border-red-300 hover:text-red-700 transition" title="Bad">Bad</button>
+                  </div>
+                </div>
                 <div id="plan-section" class="min-w-0">
                   <!-- Populated by JS -->
                 </div>
@@ -1308,6 +1338,69 @@
         document.querySelectorAll(".llm-model-select").forEach(sel => {
           sel.innerHTML = _LLM_MODEL_OPTIONS;
         });
+      }
+
+      // ── Model info cards ──────────────────────────────────────────────
+      const _MODEL_NOTES = {
+        "openai/gpt-5.4-pro":    "Frontier. Best structured output. Expensive (~$30/M out).",
+        "openai/gpt-5.4":        "Fast frontier. Great for planning. (~$15/M out).",
+        "openai/gpt-5.2-pro":    "Strong reasoning, 400K ctx. Good balance of quality & cost.",
+        "openai/gpt-5.2":        "Fast & capable, 400K ctx. Good default choice.",
+        "openai/gpt-4o-mini":    "Cheapest OpenAI. Fast but may miss nuance in plans.",
+        "openai/gpt-4o":         "Solid all-rounder. Good for extraction.",
+        "anthropic/claude-opus-4.6":   "Top-tier reasoning, 1M ctx. Best for complex plans. Expensive.",
+        "anthropic/claude-sonnet-4.6": "Excellent structured output. Great quality/cost ratio.",
+        "anthropic/claude-opus-4.5":   "Strong planner, 200K ctx. Reliable for extraction.",
+        "google/gemini-3.1-pro-preview": "1M ctx, strong reasoning. Good for long documents.",
+        "google/gemini-3-flash-preview": "Fast & cheap, 1M ctx. Good for extraction step.",
+        "google/gemini-3.1-flash-lite-preview": "Ultra-cheap, 1M ctx. Extraction only.",
+        "deepseek/deepseek-v3.2":         "Strong reasoning at low cost. Good for planning.",
+        "deepseek/deepseek-v3.2-speciale": "Enhanced V3.2. Better structured output.",
+        "deepseek/deepseek-r1":            "Chain-of-thought reasoning. Slow but thorough.",
+        "mistralai/mistral-large-2512":    "262K ctx. Solid European alternative.",
+        "mistralai/devstral-2512":         "Code-focused. Good for SQL generation step.",
+        "qwen/qwen3.5-plus-02-15":  "1M ctx, strong multilingual. Competitive quality.",
+        "qwen/qwen3.5-397b-a17b":   "Large MoE model. Good for complex plans.",
+        "qwen/qwen3.5-flash":       "Fast & cheap, 1M ctx. Good for extraction.",
+      };
+
+      function showModelCard(step) {
+        const sel = document.getElementById(`llm-model-${step}`);
+        const card = document.getElementById(`model-card-${step}`);
+        if (!sel || !card) return;
+        const note = _MODEL_NOTES[sel.value];
+        if (note) {
+          card.textContent = note;
+          card.classList.remove("hidden");
+        } else {
+          card.classList.add("hidden");
+        }
+      }
+
+      // ── Per-step feedback ─────────────────────────────────────────────
+      let _lastAnalysisData = null;
+
+      function submitFeedback(step, rating) {
+        const container = document.getElementById(`feedback-${step}`);
+        if (!container) return;
+        // Highlight selected button
+        container.querySelectorAll(".feedback-btn").forEach(btn => {
+          btn.classList.remove("bg-emerald-100", "border-emerald-400", "text-emerald-700",
+                               "bg-amber-100", "border-amber-400", "text-amber-700",
+                               "bg-red-100", "border-red-400", "text-red-700");
+        });
+        const colorMap = {
+          good:    ["bg-emerald-100", "border-emerald-400", "text-emerald-700"],
+          partial: ["bg-amber-100", "border-amber-400", "text-amber-700"],
+          bad:     ["bg-red-100", "border-red-400", "text-red-700"],
+        };
+        const clicked = [...container.querySelectorAll(".feedback-btn")].find(b => b.textContent.trim().toLowerCase() === rating);
+        if (clicked) clicked.classList.add(...colorMap[rating]);
+
+        // Log feedback (console for now; can POST to endpoint later)
+        const model = document.getElementById(`llm-model-${step}`)?.value || "default";
+        console.log(`[feedback] step=${step} rating=${rating} model=${model}`, _lastAnalysisData?.filename);
+        showToast(`Feedback recorded: ${step} = ${rating}`);
       }
 
       // Initialize
@@ -2239,6 +2332,25 @@
       }
 
       function renderAnalysisResults(data) {
+        _lastAnalysisData = data;
+
+        // ── Token usage display ────────────────────────────────────────────
+        const usage = data.token_usage;
+        if (usage) {
+          document.getElementById("tokens-extract").textContent =
+            (usage.extract_total || 0).toLocaleString();
+          document.getElementById("tokens-plan").textContent =
+            (usage.plan_total || 0).toLocaleString();
+          document.getElementById("token-usage").classList.remove("hidden");
+        }
+
+        // ── Reset feedback buttons ─────────────────────────────────────────
+        document.querySelectorAll(".feedback-btn").forEach(btn => {
+          btn.classList.remove("bg-emerald-100", "border-emerald-400", "text-emerald-700",
+                               "bg-amber-100", "border-amber-400", "text-amber-700",
+                               "bg-red-100", "border-red-400", "text-red-700");
+        });
+
         // ── Plain-text views (from backend _format_keywords / _format_plan) ─
         const esc = (s) => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
         document.getElementById("plain-keywords").textContent = data.formatted_keywords || "(no keywords)";
@@ -2593,6 +2705,14 @@
         document.getElementById("plan-section").innerHTML = "";
         document.getElementById("plain-keywords").textContent = "";
         document.getElementById("plain-plan").textContent = "";
+        document.getElementById("token-usage").classList.add("hidden");
+        _lastAnalysisData = null;
+        // Reset feedback buttons
+        document.querySelectorAll(".feedback-btn").forEach(btn => {
+          btn.classList.remove("bg-emerald-100", "border-emerald-400", "text-emerald-700",
+                               "bg-amber-100", "border-amber-400", "text-amber-700",
+                               "bg-red-100", "border-red-400", "text-red-700");
+        });
         // Reset to rich view
         _analysisViewMode = "rich";
         document.getElementById("rich-view").classList.remove("hidden");
