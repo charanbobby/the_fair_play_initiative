@@ -2782,23 +2782,13 @@
                 .map((term) => `<span class="inline-block ${colour} text-xs px-2 py-1 rounded-full">${term}</span>`)
                 .join("")}</div>`;
             } else {
-              const chips = items.filter((t) => t.length <= CHIP_THRESHOLD);
-              const bullets = items.filter((t) => t.length > CHIP_THRESHOLD);
-              let parts = [];
-              if (chips.length > 0) {
-                parts.push(`<div class="flex flex-wrap gap-1.5">${chips
-                  .map((term) => `<span class="inline-block ${colour} text-xs px-2 py-1 rounded-full">${term}</span>`)
-                  .join("")}</div>`);
-              }
-              if (bullets.length > 0) {
-                parts.push(`<div class="space-y-1${chips.length > 0 ? ' mt-2' : ''}">${bullets
-                  .map((term) => `<div class="flex items-start gap-1.5 text-xs">
-                    <span class="mt-1 w-1.5 h-1.5 rounded-full ${colour.split(' ').find(c => c.startsWith('text-')).replace('text-', 'bg-')} shrink-0"></span>
-                    <span class="text-slate-600">${term}</span>
-                  </div>`)
-                  .join("")}</div>`);
-              }
-              content = parts.join("");
+              const dotColour = colour.split(' ').find(c => c.startsWith('text-')).replace('text-', 'bg-');
+              content = `<div class="space-y-1">${items
+                .map((term) => `<div class="flex items-start gap-1.5 text-xs">
+                  <span class="mt-1 w-1.5 h-1.5 rounded-full ${dotColour} shrink-0"></span>
+                  <span class="text-slate-600">${term}</span>
+                </div>`)
+                .join("")}</div>`;
             }
 
             return `
