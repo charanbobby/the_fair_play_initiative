@@ -5,7 +5,8 @@ FastAPI application entry point.
 
 Endpoints:
     GET  /health          — liveness probe
-    GET  /                — serve the FPI SPA (static HTML)
+    GET  /                — serve the public landing page
+    GET  /dashboard       — serve the FPI admin SPA (static HTML)
     POST /chat            — session-based chatbot
     POST /quotes/draft    — quote drafting stub
 
@@ -106,7 +107,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Fair Play Initiative — API",
     description="FastAPI backend for the Fair Play Initiative attendance management platform.",
-    version="0.7.2",
+    version="0.8.0",
     lifespan=lifespan,
     redirect_slashes=False,
 )
@@ -169,13 +170,28 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 # ---------------------------------------------------------------------------
 
 @app.get("/", include_in_schema=False)
-async def serve_spa():
-    """Serve the FPI SPA index.html if present, otherwise return a redirect hint."""
+async def serve_landing():
+    """Serve the public landing page, falling back to the SPA."""
+    landing = STATIC_DIR / "landing.html"
+    if landing.exists():
+        return FileResponse(landing)
     index = STATIC_DIR / "index.html"
     if index.exists():
         return FileResponse(index)
     return JSONResponse(
-        {"message": "FPI API is running. Place index.html in app/static/ to serve the SPA."},
+        {"message": "FPI API is running."},
+        status_code=200,
+    )
+
+
+@app.get("/dashboard", include_in_schema=False)
+async def serve_dashboard():
+    """Serve the FPI admin SPA."""
+    index = STATIC_DIR / "index.html"
+    if index.exists():
+        return FileResponse(index)
+    return JSONResponse(
+        {"message": "Dashboard not available. Place index.html in app/static/."},
         status_code=200,
     )
 
