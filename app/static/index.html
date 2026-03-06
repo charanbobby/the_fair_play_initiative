@@ -113,7 +113,7 @@
               <h1 class="text-xl font-bold">The Fair Play Initiative</h1>
               <p class="text-xs text-slate-400">
                 Balanced Attendance Management
-                <span class="ml-2 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.6.2</span>
+                <span class="ml-2 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.6.3</span>
               </p>
             </div>
           </div>
@@ -1309,13 +1309,10 @@
           <option value="openai/gpt-5.2-pro">GPT-5.2 Pro (400K ctx)</option>
           <option value="openai/gpt-5.2">GPT-5.2 (400K ctx)</option>
           <option value="openai/gpt-5-mini">GPT-5 Mini</option>
-          <option value="openai/gpt-4o-mini">GPT-4o Mini</option>
-          <option value="openai/gpt-4o">GPT-4o</option>
         </optgroup>
         <optgroup label="Anthropic">
           <option value="anthropic/claude-opus-4.6">Claude Opus 4.6 (1M ctx)</option>
           <option value="anthropic/claude-sonnet-4.6">Claude Sonnet 4.6 (1M ctx)</option>
-          <option value="anthropic/claude-opus-4.5">Claude Opus 4.5 (200K ctx)</option>
         </optgroup>
         <optgroup label="Google">
           <option value="google/gemini-3.1-pro-preview">Gemini 3.1 Pro (1M ctx)</option>
@@ -1344,17 +1341,46 @@
       }
 
       // ── Model info cards ──────────────────────────────────────────────
+      // ── Model pricing: cost per million tokens [input, output] ──
+      const _MODEL_COST = {
+        "openai/gpt-5.4-pro":    [30.00, 180.00],
+        "openai/gpt-5.4":        [2.50, 15.00],
+        "openai/gpt-5.2-pro":    [21.00, 168.00],
+        "openai/gpt-5.2":        [1.75, 14.00],
+        "openai/gpt-5-mini":     [0.25, 2.00],
+        "anthropic/claude-opus-4.6":   [5.00, 25.00],
+        "anthropic/claude-sonnet-4.6": [3.00, 15.00],
+        "google/gemini-3.1-pro-preview": [2.00, 12.00],
+        "google/gemini-3-flash-preview": [0.50, 3.00],
+        "google/gemini-3.1-flash-lite-preview": [0.25, 1.50],
+        "deepseek/deepseek-v3.2":         [0.25, 0.40],
+        "deepseek/deepseek-v3.2-speciale": [0.40, 1.20],
+        "deepseek/deepseek-r1":            [0.55, 2.19],
+        "mistralai/mistral-large-2512":    [0.50, 1.50],
+        "mistralai/devstral-2512":         [0.40, 2.00],
+        "qwen/qwen3.5-plus-02-15":  [0.26, 1.56],
+        "qwen/qwen3.5-397b-a17b":   [0.39, 2.34],
+        "qwen/qwen3.5-flash":       [0.10, 0.40],
+      };
+
+      /** Format cost per 10K tokens (blended avg of input + output). */
+      function costPer10K(modelId) {
+        const c = _MODEL_COST[modelId];
+        if (!c) return null;
+        // Blended: assume ~60% input, 40% output for typical analysis workload
+        const blended = c[0] * 0.6 + c[1] * 0.4;
+        const per10k = blended / 100; // $/M → $/10K
+        return per10k < 0.01 ? `$${per10k.toFixed(4)}` : `$${per10k.toFixed(3)}`;
+      }
+
       const _MODEL_NOTES = {
-        "openai/gpt-5.4-pro":    "Frontier. Best structured output. Expensive (~$30/M out).",
-        "openai/gpt-5.4":        "Fast frontier. Great for planning. (~$15/M out).",
-        "openai/gpt-5.2-pro":    "Strong reasoning, 400K ctx. Good balance of quality & cost.",
+        "openai/gpt-5.4-pro":    "Frontier. Best structured output. Very expensive.",
+        "openai/gpt-5.4":        "Fast frontier. Great for planning.",
+        "openai/gpt-5.2-pro":    "Strong reasoning, 400K ctx. Good quality & cost balance.",
         "openai/gpt-5.2":        "Fast & capable, 400K ctx. Good default choice.",
-        "openai/gpt-5-mini":     "Cheap GPT-5 family. Good balance of speed & structured output.",
-        "openai/gpt-4o-mini":    "Cheapest OpenAI. Fast but may miss nuance in plans.",
-        "openai/gpt-4o":         "Solid all-rounder. Good for extraction.",
-        "anthropic/claude-opus-4.6":   "Top-tier reasoning, 1M ctx. Best for complex plans. Expensive.",
+        "openai/gpt-5-mini":     "Cheap GPT-5 family. Good speed & structured output.",
+        "anthropic/claude-opus-4.6":   "Top-tier reasoning, 1M ctx. Best for complex plans.",
         "anthropic/claude-sonnet-4.6": "Excellent structured output. Great quality/cost ratio.",
-        "anthropic/claude-opus-4.5":   "Strong planner, 200K ctx. Reliable for extraction.",
         "google/gemini-3.1-pro-preview": "1M ctx, strong reasoning. Good for long documents.",
         "google/gemini-3-flash-preview": "Fast & cheap, 1M ctx. Good for extraction step.",
         "google/gemini-3.1-flash-lite-preview": "Ultra-cheap, 1M ctx. Extraction only.",
@@ -1372,9 +1398,13 @@
         const sel = document.getElementById(`llm-model-${step}`);
         const card = document.getElementById(`model-card-${step}`);
         if (!sel || !card) return;
-        const note = _MODEL_NOTES[sel.value];
+        const modelId = sel.value;
+        const note = _MODEL_NOTES[modelId];
         if (note) {
-          card.textContent = note;
+          const cost = costPer10K(modelId);
+          card.innerHTML = note + (cost
+            ? ` <span class="font-mono text-indigo-600">${cost}/10K tokens</span>`
+            : "");
           card.classList.remove("hidden");
         } else {
           card.classList.add("hidden");
@@ -1406,10 +1436,22 @@
                 );
               }
               if (s.total_runs > 0) {
-                parts.push(
-                  `Avg tokens: <span class="font-mono font-semibold">${Math.round(s.avg_tokens).toLocaleString()}</span> ` +
-                  `<span class="text-slate-400">(${s.total_runs} runs)</span>`
-                );
+                let tokenPart =
+                  `Avg tokens: <span class="font-mono font-semibold">${Math.round(s.avg_tokens).toLocaleString()}</span>`;
+                // Estimate cost from avg tokens
+                const c = _MODEL_COST[model];
+                if (c && s.avg_tokens > 0) {
+                  const blended = c[0] * 0.6 + c[1] * 0.4;
+                  const estCost = (s.avg_tokens / 1_000_000) * blended;
+                  tokenPart += ` · Est. <span class="font-mono text-indigo-600">$${estCost < 0.01 ? estCost.toFixed(4) : estCost.toFixed(3)}</span>/run`;
+                }
+                // Avg speed
+                if (s.avg_duration_ms > 0) {
+                  const secs = (s.avg_duration_ms / 1000).toFixed(1);
+                  tokenPart += ` · <span class="font-mono">${secs}s</span> avg`;
+                }
+                tokenPart += ` <span class="text-slate-400">(${s.total_runs} runs)</span>`;
+                parts.push(tokenPart);
               }
               statsEl.innerHTML = parts.join(`<span class="mx-1 text-slate-300">|</span>`);
             }

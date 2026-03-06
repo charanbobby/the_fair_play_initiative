@@ -492,9 +492,11 @@ class TokenUsage(BaseModel):
     extract_prompt: int = 0
     extract_completion: int = 0
     extract_total: int = 0
+    extract_duration_ms: int = 0
     plan_prompt: int = 0
     plan_completion: int = 0
     plan_total: int = 0
+    plan_duration_ms: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -519,6 +521,7 @@ class ModelRatingStats(BaseModel):
     step: str
     total_runs: int = 0
     avg_tokens: float = 0.0
+    avg_duration_ms: float = 0.0
     rating_count: int = 0
     good_pct: float = 0.0
     partial_pct: float = 0.0

@@ -125,6 +125,7 @@ async def analyze_policy(
                 prompt_tokens=usage.extract_prompt,
                 completion_tokens=usage.extract_completion,
                 total_tokens=usage.extract_total,
+                duration_ms=usage.extract_duration_ms,
             ))
             db.add(models.AnalysisLog(
                 filename=file.filename or "",
@@ -133,6 +134,7 @@ async def analyze_policy(
                 prompt_tokens=usage.plan_prompt,
                 completion_tokens=usage.plan_completion,
                 total_tokens=usage.plan_total,
+                duration_ms=usage.plan_duration_ms,
             ))
             db.commit()
 

@@ -63,6 +63,7 @@ def get_stats(
         models.AnalysisLog.step,
         sa_func.count().label("total_runs"),
         sa_func.avg(models.AnalysisLog.total_tokens).label("avg_tokens"),
+        sa_func.avg(models.AnalysisLog.duration_ms).label("avg_duration_ms"),
     ).group_by(models.AnalysisLog.llm_model, models.AnalysisLog.step)
 
     if step:
@@ -85,6 +86,7 @@ def get_stats(
             step=step_name,
             total_runs=log.total_runs if log else 0,
             avg_tokens=round(log.avg_tokens or 0, 1) if log else 0.0,
+            avg_duration_ms=round(log.avg_duration_ms or 0, 0) if log else 0.0,
             rating_count=rc,
             good_pct=round(fb.good / rc * 100, 1) if fb and rc else 0.0,
             partial_pct=round(fb.partial / rc * 100, 1) if fb and rc else 0.0,

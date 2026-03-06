@@ -67,6 +67,8 @@ class FPIState(TypedDict):
     sql_plan: SQLQueryPlan | None
     extract_tokens: dict | None
     plan_tokens: dict | None
+    extract_duration_ms: int | None
+    plan_duration_ms: int | None
     error: str | None
 
 
@@ -86,6 +88,8 @@ def _extract_token_usage(raw_msg) -> dict:
 
 def node_extract(state: FPIState) -> dict:
     """Categorise policy keywords into schema-mapped groups."""
+    import time
+    t0 = time.perf_counter()
     model = _build_model(state.get("model_extract")).with_structured_output(
         KeywordExtraction, include_raw=True
     )
@@ -93,13 +97,14 @@ def node_extract(state: FPIState) -> dict:
         SystemMessage(content=_KEYWORD_SYSTEM_MSG),
         HumanMessage(content=state["pdf_text"]),
     ])
+    duration_ms = int((time.perf_counter() - t0) * 1000)
     result = raw_result["parsed"]
     tokens = _extract_token_usage(raw_result.get("raw"))
     # Post-process: enforce realistic confidence
     if result.confidence_score >= 1.0:
         result.confidence_score = 0.85
     result.confidence_score = round(min(result.confidence_score, 0.95), 2)
-    return {"keywords": result, "extract_tokens": tokens}
+    return {"keywords": result, "extract_tokens": tokens, "extract_duration_ms": duration_ms}
 
 
 def _adjust_confidence(score: float, has_placeholders: bool) -> float:
@@ -118,6 +123,8 @@ def node_plan(state: FPIState) -> dict:
     if not state.get("keywords"):
         return {"error": "node_plan: no keywords in state"}
 
+    import time
+    t0 = time.perf_counter()
     model = _build_model(state.get("model_plan")).with_structured_output(
         SQLQueryPlan, include_raw=True
     )
@@ -132,6 +139,7 @@ def node_plan(state: FPIState) -> dict:
         SystemMessage(content=_PLAN_SYSTEM_MSG),
         HumanMessage(content=human_msg),
     ])
+    duration_ms = int((time.perf_counter() - t0) * 1000)
     result = raw_result["parsed"]
     tokens = _extract_token_usage(raw_result.get("raw"))
     # Post-process: enforce realistic confidence scores
@@ -147,7 +155,7 @@ def node_plan(state: FPIState) -> dict:
     # Synthesize legacy cte_description from structured fields
     if result.table_steps or result.rule_rows:
         result.cte_description = _synthesize_cte_description(result)
-    return {"sql_plan": result, "plan_tokens": tokens}
+    return {"sql_plan": result, "plan_tokens": tokens, "plan_duration_ms": duration_ms}
 
 
 # ---------------------------------------------------------------------------
@@ -395,6 +403,8 @@ async def analyze_policy_document(
         "sql_plan": None,
         "extract_tokens": None,
         "plan_tokens": None,
+        "extract_duration_ms": None,
+        "plan_duration_ms": None,
         "error": None,
     }
 
@@ -415,9 +425,11 @@ async def analyze_policy_document(
         extract_prompt=et.get("prompt", 0),
         extract_completion=et.get("completion", 0),
         extract_total=et.get("total", 0),
+        extract_duration_ms=final_state.get("extract_duration_ms") or 0,
         plan_prompt=pt.get("prompt", 0),
         plan_completion=pt.get("completion", 0),
         plan_total=pt.get("total", 0),
+        plan_duration_ms=final_state.get("plan_duration_ms") or 0,
     )
     return PolicyAnalysisResponse(
         filename=filename,
