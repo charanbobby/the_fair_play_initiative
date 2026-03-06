@@ -76,6 +76,11 @@
       "active",
       "effective_date"
     ],
+    "column_semantics": {
+      "id": "lower-kebab-case slug (e.g. 'acme-hr-att-001')",
+      "active": "TRUE = active, FALSE = inactive (boolean column — use TRUE/FALSE, not 1/0)",
+      "effective_date": "DATE in 'YYYY-MM-DD' format"
+    },
     "primary_key": [
       "id"
     ],
@@ -108,6 +113,13 @@
       "description",
       "active"
     ],
+    "column_semantics": {
+      "id": "SERIAL auto-generated integer — OMIT from INSERT statements",
+      "condition": "'late' | 'early' | 'absence' | 'no-call'",
+      "threshold": "INTEGER — minutes of deviation (0 = any)",
+      "points": "REAL — penalty points for a single occurrence",
+      "active": "TRUE = active, FALSE = inactive (boolean column — use TRUE/FALSE, not 1/0)"
+    },
     "primary_key": [
       "id"
     ],
@@ -138,6 +150,11 @@
       "region_id",
       "policy_id"
     ],
+    "column_semantics": {
+      "id": "SERIAL auto-generated integer — OMIT from INSERT statements",
+      "points": "REAL — current rolling point balance",
+      "trend": "'up' | 'down' | 'stable'"
+    },
     "primary_key": [
       "id"
     ],
@@ -176,6 +193,11 @@
       "status",
       "reason"
     ],
+    "column_semantics": {
+      "id": "SERIAL auto-generated integer — OMIT from INSERT statements",
+      "employee_id": "INTEGER — references employee.id",
+      "points": "REAL — positive = penalty, negative = deduction"
+    },
     "primary_key": [
       "id"
     ],
@@ -206,6 +228,10 @@
       "points",
       "status"
     ],
+    "column_semantics": {
+      "id": "SERIAL auto-generated integer — OMIT from INSERT statements",
+      "employee_id": "INTEGER — references employee.id"
+    },
     "primary_key": [
       "id"
     ],
@@ -249,6 +275,9 @@
       "message",
       "created_at"
     ],
+    "column_semantics": {
+      "id": "SERIAL auto-generated integer — OMIT from INSERT statements"
+    },
     "primary_key": [
       "id"
     ],
