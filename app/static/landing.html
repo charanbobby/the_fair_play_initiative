@@ -87,7 +87,7 @@
                         <h1 class="text-lg font-bold tracking-tight">The Fair Play Initiative</h1>
                         <p class="text-xs text-slate-400">
                             AI-Powered Policy Analysis
-                            <span class="ml-1 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.8.2</span>
+                            <span class="ml-1 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.8.3</span>
                         </p>
                     </div>
                 </div>
@@ -122,6 +122,37 @@
                    class="border border-slate-500 hover:border-indigo-400 text-slate-300 hover:text-white px-8 py-3 rounded-lg font-semibold transition text-sm">
                     See How It Works
                 </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <!-- CORE THESIS -->
+    <!-- ================================================================= -->
+    <section class="bg-slate-50 py-16">
+        <div class="max-w-4xl mx-auto px-4">
+            <div class="text-center reveal">
+                <p class="text-indigo-600 font-semibold text-sm uppercase tracking-wide mb-3">The Problem</p>
+                <h3 class="text-3xl font-bold mb-6">Every Organization Runs on the Same Hidden Workflow</h3>
+            </div>
+            <div class="max-w-3xl mx-auto space-y-4 text-slate-600 leading-relaxed reveal reveal-d1">
+                <p>
+                    Someone reads a document, figures out what it means, and types the important parts into a system.
+                    HR reads a policy and enters attendance rules. Claims adjusters read medical records and enter coverage decisions.
+                    Procurement teams read contracts and enter vendor terms. It's skilled, tedious work &mdash; and it's the
+                    bottleneck of every organization.
+                </p>
+                <p>
+                    AI can read those documents. But here's the problem: <strong>AI doesn't give you the same answer twice.</strong>
+                    Ask it to extract rules from a policy today and you get one result. Ask tomorrow, you might get something
+                    slightly different. That's fine for writing emails. It's not fine when the output triggers someone's
+                    disciplinary action, denies an insurance claim, or commits your company to a vendor contract.
+                </p>
+                <p class="text-slate-800 font-medium bg-indigo-50 border-l-4 border-indigo-500 pl-4 py-3 rounded-r-lg">
+                    We're building a control layer that takes unreliable AI output and makes it enterprise-reliable &mdash;
+                    not by hoping the AI gets it right, but by giving humans the right checkpoints to catch what it gets wrong,
+                    and then measuring the system into trustworthiness over time.
+                </p>
             </div>
         </div>
     </section>
@@ -425,6 +456,78 @@
     </section>
 
     <!-- ================================================================= -->
+    <!-- PARADIGM SHIFT -->
+    <!-- ================================================================= -->
+    <section class="bg-white py-20">
+        <div class="max-w-5xl mx-auto px-4">
+            <div class="text-center mb-12 reveal">
+                <p class="text-indigo-600 font-semibold text-sm uppercase tracking-wide mb-2">The Shift</p>
+                <h3 class="text-3xl font-bold mb-4">Software Changed. The Workflow Didn't.</h3>
+                <p class="text-slate-500 max-w-lg mx-auto">
+                    Traditional software is predictable. AI-powered software isn't.
+                    That demands a fundamentally different approach.
+                </p>
+            </div>
+
+            <div class="overflow-x-auto reveal reveal-d1">
+                <table class="w-full text-sm border-collapse">
+                    <thead>
+                        <tr>
+                            <th class="text-left py-3 px-4 text-slate-400 font-medium text-xs uppercase tracking-wide border-b border-slate-200"></th>
+                            <th class="text-left py-3 px-4 border-b border-slate-200">
+                                <div class="flex items-center gap-2">
+                                    <div class="bg-slate-100 p-1 rounded"><i data-lucide="code-2" class="w-4 h-4 text-slate-500"></i></div>
+                                    <span class="font-semibold text-slate-600">Traditional Software</span>
+                                </div>
+                            </th>
+                            <th class="text-left py-3 px-4 border-b border-indigo-200 bg-indigo-50/50 rounded-t-lg">
+                                <div class="flex items-center gap-2">
+                                    <div class="bg-indigo-100 p-1 rounded"><i data-lucide="sparkles" class="w-4 h-4 text-indigo-600"></i></div>
+                                    <span class="font-semibold text-indigo-700">AI-Powered Software</span>
+                                </div>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-slate-600">
+                        <tr class="border-b border-slate-100">
+                            <td class="py-3 px-4 font-medium text-slate-700 text-xs uppercase tracking-wide">How it works</td>
+                            <td class="py-3 px-4">Same input = same output, every time</td>
+                            <td class="py-3 px-4 bg-indigo-50/30">Same input can produce different results each time</td>
+                        </tr>
+                        <tr class="border-b border-slate-100">
+                            <td class="py-3 px-4 font-medium text-slate-700 text-xs uppercase tracking-wide">Where effort goes</td>
+                            <td class="py-3 px-4">80&ndash;90% building: writing logic, fixing bugs</td>
+                            <td class="py-3 px-4 bg-indigo-50/30">80&ndash;90% evaluating: checking outputs, tuning quality</td>
+                        </tr>
+                        <tr class="border-b border-slate-100">
+                            <td class="py-3 px-4 font-medium text-slate-700 text-xs uppercase tracking-wide">When is it "done"?</td>
+                            <td class="py-3 px-4">When the bugs are fixed, you ship it</td>
+                            <td class="py-3 px-4 bg-indigo-50/30">Never &mdash; continuous monitoring and improving</td>
+                        </tr>
+                        <tr class="border-b border-slate-100">
+                            <td class="py-3 px-4 font-medium text-slate-700 text-xs uppercase tracking-wide">When things go wrong</td>
+                            <td class="py-3 px-4">Bugs are predictable and reproducible</td>
+                            <td class="py-3 px-4 bg-indigo-50/30">Failures are subtle, inconsistent, and can drift</td>
+                        </tr>
+                        <tr>
+                            <td class="py-3 px-4 font-medium text-slate-700 text-xs uppercase tracking-wide">The human's role</td>
+                            <td class="py-3 px-4">Operates the system: fills forms, clicks buttons</td>
+                            <td class="py-3 px-4 bg-indigo-50/30 font-medium text-indigo-700">Supervises the system: reviews output, approves or rejects</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="mt-8 text-center reveal reveal-d2">
+                <p class="text-sm text-slate-500 max-w-2xl mx-auto">
+                    Businesses need guarantees &mdash; precise compliance, exact calculations, auditable decisions.
+                    We're building the architecture that delivers those guarantees using technology that, by its nature, doesn't offer them.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- ================================================================= -->
     <!-- 3-STEP PIPELINE -->
     <!-- ================================================================= -->
     <section id="how-it-works" class="bg-white py-20">
@@ -642,13 +745,161 @@
                 </div>
             </div>
 
-            <!-- Cross-industry footnote -->
-            <div class="mt-12 text-center reveal">
-                <p class="text-sm text-slate-400">
-                    The Extract &rarr; Plan &rarr; Verify &rarr; Execute pattern is domain-agnostic.
-                    While FPI focuses on workforce compliance, the same architecture applies to
-                    insurance claims, procurement contracts, regulatory filings, and medical intake.
+        </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <!-- CROSS-INDUSTRY -->
+    <!-- ================================================================= -->
+    <section class="bg-slate-50 py-20">
+        <div class="max-w-5xl mx-auto px-4">
+            <div class="text-center mb-12 reveal">
+                <p class="text-indigo-600 font-semibold text-sm uppercase tracking-wide mb-2">Beyond HR</p>
+                <h3 class="text-3xl font-bold mb-4">Same Pattern, Any Industry</h3>
+                <p class="text-slate-500 max-w-lg mx-auto">
+                    Anywhere someone reads a document and enters data into a system, this pipeline applies.
+                    FPI is the first proving ground &mdash; not the last.
                 </p>
+            </div>
+
+            <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 reveal reveal-d1">
+                <!-- Workforce (active) -->
+                <div class="bg-white rounded-xl p-5 card-shadow border-2 border-indigo-200 relative">
+                    <div class="absolute -top-2.5 right-4">
+                        <span class="bg-indigo-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">LIVE</span>
+                    </div>
+                    <div class="flex items-center gap-2 mb-3">
+                        <div class="bg-indigo-100 p-1.5 rounded-lg"><i data-lucide="briefcase" class="w-4 h-4 text-indigo-600"></i></div>
+                        <span class="font-semibold text-sm">Workforce Compliance</span>
+                    </div>
+                    <div class="space-y-1.5 text-xs text-slate-500">
+                        <p><span class="text-slate-400">Doc:</span> HR attendance policies</p>
+                        <p><span class="text-slate-400">Extract:</span> Rules, point values, thresholds</p>
+                        <p><span class="text-slate-400">Plan:</span> "Create policy, add 5 rules, link to region"</p>
+                        <p><span class="text-slate-400">Result:</span> Policy &amp; rules in compliance database</p>
+                    </div>
+                </div>
+                <!-- Insurance -->
+                <div class="bg-white rounded-xl p-5 card-shadow border border-slate-100 card-hover">
+                    <div class="flex items-center gap-2 mb-3">
+                        <div class="bg-amber-100 p-1.5 rounded-lg"><i data-lucide="heart-pulse" class="w-4 h-4 text-amber-600"></i></div>
+                        <span class="font-semibold text-sm">Insurance</span>
+                    </div>
+                    <div class="space-y-1.5 text-xs text-slate-500">
+                        <p><span class="text-slate-400">Doc:</span> Claims, medical records</p>
+                        <p><span class="text-slate-400">Extract:</span> Diagnoses, procedures, coverage terms</p>
+                        <p><span class="text-slate-400">Plan:</span> "Approve claim, apply deductible, flag for review"</p>
+                        <p><span class="text-slate-400">Result:</span> Adjudication decision and payout</p>
+                    </div>
+                </div>
+                <!-- Procurement -->
+                <div class="bg-white rounded-xl p-5 card-shadow border border-slate-100 card-hover">
+                    <div class="flex items-center gap-2 mb-3">
+                        <div class="bg-emerald-100 p-1.5 rounded-lg"><i data-lucide="handshake" class="w-4 h-4 text-emerald-600"></i></div>
+                        <span class="font-semibold text-sm">Procurement</span>
+                    </div>
+                    <div class="space-y-1.5 text-xs text-slate-500">
+                        <p><span class="text-slate-400">Doc:</span> Vendor contracts, RFPs</p>
+                        <p><span class="text-slate-400">Extract:</span> Terms, SLAs, pricing, penalties</p>
+                        <p><span class="text-slate-400">Plan:</span> "Onboard vendor, set payment terms, flag SLA risk"</p>
+                        <p><span class="text-slate-400">Result:</span> Contract records and payment schedule</p>
+                    </div>
+                </div>
+                <!-- Regulatory -->
+                <div class="bg-white rounded-xl p-5 card-shadow border border-slate-100 card-hover">
+                    <div class="flex items-center gap-2 mb-3">
+                        <div class="bg-purple-100 p-1.5 rounded-lg"><i data-lucide="landmark" class="w-4 h-4 text-purple-600"></i></div>
+                        <span class="font-semibold text-sm">Regulatory</span>
+                    </div>
+                    <div class="space-y-1.5 text-xs text-slate-500">
+                        <p><span class="text-slate-400">Doc:</span> Legal filings, compliance docs</p>
+                        <p><span class="text-slate-400">Extract:</span> Requirements, deadlines, obligations</p>
+                        <p><span class="text-slate-400">Plan:</span> "Map to reporting schedule, flag gaps"</p>
+                        <p><span class="text-slate-400">Result:</span> Filing submissions and audit trail</p>
+                    </div>
+                </div>
+                <!-- Healthcare -->
+                <div class="bg-white rounded-xl p-5 card-shadow border border-slate-100 card-hover">
+                    <div class="flex items-center gap-2 mb-3">
+                        <div class="bg-red-100 p-1.5 rounded-lg"><i data-lucide="stethoscope" class="w-4 h-4 text-red-600"></i></div>
+                        <span class="font-semibold text-sm">Healthcare</span>
+                    </div>
+                    <div class="space-y-1.5 text-xs text-slate-500">
+                        <p><span class="text-slate-400">Doc:</span> Patient forms, referrals</p>
+                        <p><span class="text-slate-400">Extract:</span> Demographics, conditions, medications</p>
+                        <p><span class="text-slate-400">Plan:</span> "Assign provider, schedule intake, flag allergies"</p>
+                        <p><span class="text-slate-400">Result:</span> EHR records and care plan</p>
+                    </div>
+                </div>
+                <!-- The pattern -->
+                <div class="bg-slate-800 rounded-xl p-5 card-shadow text-white flex flex-col justify-center items-center text-center">
+                    <i data-lucide="infinity" class="w-8 h-8 text-indigo-400 mb-3"></i>
+                    <p class="font-semibold text-sm mb-1">Same Architecture</p>
+                    <p class="text-xs text-slate-400">Extract &rarr; Plan &rarr; Verify &rarr; Execute</p>
+                    <p class="text-xs text-slate-500 mt-2">Different document. Different domain. Same bones.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <!-- WHERE THIS IS HEADING -->
+    <!-- ================================================================= -->
+    <section class="bg-white py-20">
+        <div class="max-w-4xl mx-auto px-4">
+            <div class="text-center mb-12 reveal">
+                <p class="text-indigo-600 font-semibold text-sm uppercase tracking-wide mb-2">The Trajectory</p>
+                <h3 class="text-3xl font-bold mb-4">From Data Entry Clerk to Quality Supervisor</h3>
+                <p class="text-slate-500 max-w-lg mx-auto">
+                    The end goal isn't a better data-entry form. It's no data-entry form at all.
+                </p>
+            </div>
+
+            <div class="space-y-0 reveal reveal-d1">
+                <!-- Now -->
+                <div class="flex gap-4 items-start">
+                    <div class="flex flex-col items-center shrink-0">
+                        <div class="bg-indigo-500 text-white w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold">1</div>
+                        <div class="w-0.5 h-full bg-slate-200 min-h-[60px]"></div>
+                    </div>
+                    <div class="pb-8">
+                        <p class="font-semibold text-sm text-indigo-600 uppercase tracking-wide mb-1">Right Now</p>
+                        <p class="text-slate-600 text-sm leading-relaxed">
+                            You upload a document, review the extraction, check the plan, rate each step, and approve.
+                            The interface is your <strong>workspace</strong>.
+                        </p>
+                    </div>
+                </div>
+                <!-- Next -->
+                <div class="flex gap-4 items-start">
+                    <div class="flex flex-col items-center shrink-0">
+                        <div class="bg-amber-500 text-white w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold">2</div>
+                        <div class="w-0.5 h-full bg-slate-200 min-h-[60px]"></div>
+                    </div>
+                    <div class="pb-8">
+                        <p class="font-semibold text-sm text-amber-600 uppercase tracking-wide mb-1">Next</p>
+                        <p class="text-slate-600 text-sm leading-relaxed">
+                            You open a dashboard that shows what the system processed overnight &mdash;
+                            confidence scores, flagged anomalies, a summary of decisions made.
+                            The interface is your <strong>audit panel</strong>.
+                        </p>
+                    </div>
+                </div>
+                <!-- Eventually -->
+                <div class="flex gap-4 items-start">
+                    <div class="flex flex-col items-center shrink-0">
+                        <div class="bg-emerald-500 text-white w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold">3</div>
+                    </div>
+                    <div>
+                        <p class="font-semibold text-sm text-emerald-600 uppercase tracking-wide mb-1">Eventually</p>
+                        <p class="text-slate-600 text-sm leading-relaxed">
+                            The only things that reach a human are genuine edge cases &mdash;
+                            unusual documents, ambiguous language, cross-jurisdictional conflicts.
+                            Everything routine is handled. The human isn't removed from the process.
+                            They're <strong>promoted</strong>.
+                        </p>
+                    </div>
+                </div>
             </div>
         </div>
     </section>
@@ -677,7 +928,7 @@
             <div class="flex items-center gap-2">
                 <i data-lucide="scale" class="w-3.5 h-3.5"></i>
                 <span>The Fair Play Initiative</span>
-                <span class="bg-slate-700 text-slate-400 font-mono px-1.5 py-0.5 rounded">v0.8.2</span>
+                <span class="bg-slate-700 text-slate-400 font-mono px-1.5 py-0.5 rounded">v0.8.3</span>
             </div>
             <a href="/dashboard" class="text-slate-500 hover:text-slate-300 transition">Go to Dashboard</a>
         </div>
