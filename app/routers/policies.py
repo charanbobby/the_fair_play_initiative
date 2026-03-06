@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
+from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, File, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -78,38 +78,54 @@ def delete_policy(policy_id: str, db: Session = Depends(get_db)):
 
 @router.post("/analyze", response_model=PolicyAnalysisResponse, tags=["policies"])
 async def analyze_policy(
-    file: UploadFile = File(...),
+    file: Optional[UploadFile] = File(None),
+    text: Optional[str] = Form(None),
     model_extract: Optional[str] = None,
     model_plan: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
     """
-    Upload a policy document (PDF, DOCX, or TXT) and receive:
+    Analyse a policy document and receive:
       - Extracted keywords mapped to the FPI schema entities
       - A structured SQL ingestion plan (no database writes performed)
+
+    Supply EITHER a file upload (PDF, DOCX, TXT) or raw text via the
+    ``text`` form field.  At least one must be provided.
 
     Optional query parameters override the default LLM model per step:
       - model_extract: model for keyword extraction
       - model_plan: model for SQL ingestion planning
     """
-    allowed = {".pdf", ".docx", ".doc", ".txt"}
     from pathlib import Path
     from app.config import settings
-    ext = Path(file.filename or "").suffix.lower()
-    if ext not in allowed:
+
+    if file and file.filename:
+        # ── File upload path ──
+        allowed = {".pdf", ".docx", ".doc", ".txt"}
+        ext = Path(file.filename).suffix.lower()
+        if ext not in allowed:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported file type '{ext}'. Allowed: {', '.join(sorted(allowed))}",
+            )
+        content = await file.read()
+        if not content:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+        filename = file.filename
+    elif text and text.strip():
+        # ── Pasted text path ──
+        content = text.strip().encode("utf-8")
+        filename = "pasted_policy.txt"
+    else:
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported file type '{ext}'. Allowed: {', '.join(sorted(allowed))}",
+            detail="Provide either a file upload or paste policy text.",
         )
-
-    content = await file.read()
-    if not content:
-        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 
     try:
         from app.services.policy_analyzer import analyze_policy_document
         result = await analyze_policy_document(
-            file.filename, content,
+            filename, content,
             model_extract=model_extract,
             model_plan=model_plan,
         )
@@ -119,7 +135,7 @@ async def analyze_policy(
         usage = result.token_usage
         if usage:
             db.add(models.AnalysisLog(
-                filename=file.filename or "",
+                filename=filename,
                 step="extract",
                 llm_model=model_extract or default_model,
                 prompt_tokens=usage.extract_prompt,
@@ -128,7 +144,7 @@ async def analyze_policy(
                 duration_ms=usage.extract_duration_ms,
             ))
             db.add(models.AnalysisLog(
-                filename=file.filename or "",
+                filename=filename,
                 step="plan",
                 llm_model=model_plan or default_model,
                 prompt_tokens=usage.plan_prompt,

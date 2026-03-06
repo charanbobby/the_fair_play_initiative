@@ -113,7 +113,7 @@
               <h1 class="text-xl font-bold">The Fair Play Initiative</h1>
               <p class="text-xs text-slate-400">
                 Balanced Attendance Management
-                <span class="ml-2 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.6.3</span>
+                <span class="ml-2 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.6.4</span>
               </p>
             </div>
           </div>
@@ -427,6 +427,30 @@
               class="bg-slate-800 text-white px-6 py-2 rounded-lg hover:bg-slate-900 transition"
             >
               Browse Files
+            </button>
+          </div>
+
+          <!-- Divider -->
+          <div class="flex items-center gap-3 my-4">
+            <div class="flex-1 border-t border-slate-200"></div>
+            <span class="text-xs font-medium text-slate-400 uppercase tracking-wide">or paste text</span>
+            <div class="flex-1 border-t border-slate-200"></div>
+          </div>
+
+          <!-- Paste Text Zone -->
+          <div class="relative">
+            <textarea
+              id="policy-text"
+              rows="6"
+              placeholder="Paste your policy text here…"
+              class="w-full border border-slate-300 rounded-xl p-4 text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent resize-y"
+            ></textarea>
+            <button
+              id="policy-text-submit"
+              onclick="handlePolicyTextSubmit()"
+              class="mt-2 bg-indigo-600 text-white px-5 py-2 rounded-lg hover:bg-indigo-700 transition text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Analyse Text
             </button>
           </div>
 
@@ -2301,6 +2325,52 @@
       function handlePolicyUpload(event) {
         const file = event.target.files[0];
         if (file) processPolicyFile(file);
+      }
+
+      async function handlePolicyTextSubmit() {
+        const textarea = document.getElementById("policy-text");
+        const policyText = (textarea.value || "").trim();
+        if (!policyText) {
+          showToast("Please paste some policy text first.", "error");
+          return;
+        }
+        const btn = document.getElementById("policy-text-submit");
+        const origLabel = btn.textContent;
+        btn.disabled = true;
+        btn.innerHTML = `<span class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2 align-middle"></span>Analysing…`;
+
+        try {
+          const formData = new FormData();
+          formData.append("text", policyText);
+
+          const extractModel = document.getElementById("llm-model-extract")?.value || "";
+          const planModel = document.getElementById("llm-model-plan")?.value || "";
+          const params = new URLSearchParams();
+          if (extractModel) params.set("model_extract", extractModel);
+          if (planModel) params.set("model_plan", planModel);
+          const qs = params.toString();
+          const analyzeUrl = `/api/v1/policies/analyze${qs ? "?" + qs : ""}`;
+
+          const response = await fetch(analyzeUrl, {
+            method: "POST",
+            body: formData,
+          });
+
+          if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.detail || `Server error ${response.status}`);
+          }
+
+          const data = await response.json();
+          renderAnalysisResults(data);
+          document.getElementById("analysis-results").classList.remove("hidden");
+          showToast("Analysis complete!");
+        } catch (err) {
+          showToast(`Analysis failed: ${err.message}`, "error");
+        } finally {
+          btn.disabled = false;
+          btn.textContent = origLabel;
+        }
       }
 
       async function processPolicyFile(file) {
