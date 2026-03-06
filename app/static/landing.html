@@ -87,7 +87,7 @@
                         <h1 class="text-lg font-bold tracking-tight">The Fair Play Initiative</h1>
                         <p class="text-xs text-slate-400">
                             AI-Powered Policy Analysis
-                            <span class="ml-1 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.8.4</span>
+                            <span class="ml-1 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.8.5</span>
                         </p>
                     </div>
                 </div>
@@ -639,66 +639,340 @@
     </section>
 
     <!-- ================================================================= -->
-    <!-- TRUST LIFECYCLE -->
+    <!-- TRUST LIFECYCLE — with UI mockups -->
     <!-- ================================================================= -->
     <section class="bg-slate-50 py-20">
-        <div class="max-w-5xl mx-auto px-4">
+        <div class="max-w-6xl mx-auto px-4">
             <div class="text-center mb-14 reveal">
-                <p class="text-indigo-600 font-semibold text-sm uppercase tracking-wide mb-2">Over Time</p>
+                <p class="text-indigo-600 font-semibold text-sm uppercase tracking-wide mb-2">The Trajectory</p>
                 <h3 class="text-3xl font-bold mb-4">Trust Is Earned, Not Declared</h3>
                 <p class="text-slate-500 max-w-lg mx-auto">
-                    Every approval and rejection trains the system. Over time, routine work flows through automatically.
+                    Every approval and rejection trains the system. The human isn't removed from the process &mdash;
+                    they're <strong>promoted</strong>.
                 </p>
             </div>
 
-            <div class="grid md:grid-cols-3 gap-6">
-                <!-- Phase 1 -->
-                <div class="relative reveal reveal-d1">
-                    <div class="bg-white rounded-xl p-6 card-shadow card-hover h-full">
-                        <div class="bg-indigo-100 w-10 h-10 rounded-full flex items-center justify-center mb-4">
-                            <i data-lucide="eye" class="w-5 h-5 text-indigo-600"></i>
+            <div class="space-y-16">
+
+                <!-- ─── PHASE 1 — HANDS-ON ─── -->
+                <div class="grid md:grid-cols-2 gap-8 items-start reveal">
+                    <div class="md:pt-8">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="bg-indigo-500 text-white w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm">1</div>
+                            <div>
+                                <p class="text-xs font-bold text-indigo-600 uppercase tracking-wide">Phase 1</p>
+                                <h4 class="font-bold text-xl">Hands-On</h4>
+                            </div>
                         </div>
-                        <p class="text-xs font-bold text-indigo-600 uppercase tracking-wide mb-1">Phase 1</p>
-                        <h4 class="font-bold text-lg mb-3">Hands-On</h4>
-                        <p class="text-sm text-slate-500 leading-relaxed">
+                        <p class="text-sm text-slate-600 leading-relaxed mb-3">
                             Review every output. Rate each step. The system builds a reliability baseline.
+                            The interface is your <strong>workspace</strong>.
                         </p>
+                        <div class="flex flex-wrap gap-2">
+                            <span class="bg-indigo-100 text-indigo-700 text-[10px] font-semibold px-2 py-1 rounded-full">All reviews required</span>
+                            <span class="bg-indigo-100 text-indigo-700 text-[10px] font-semibold px-2 py-1 rounded-full">Rate every step</span>
+                            <span class="bg-indigo-100 text-indigo-700 text-[10px] font-semibold px-2 py-1 rounded-full">Building baseline</span>
+                        </div>
                     </div>
-                    <div class="hidden md:flex absolute top-1/2 -right-3 z-10 bg-white rounded-full p-1 shadow">
-                        <i data-lucide="chevron-right" class="w-4 h-4 text-slate-400"></i>
+                    <div class="reveal reveal-d1">
+                        <div class="browser-frame">
+                            <div class="browser-bar">
+                                <div class="browser-dot bg-red-400"></div>
+                                <div class="browser-dot bg-amber-400"></div>
+                                <div class="browser-dot bg-emerald-400"></div>
+                                <span class="text-xs text-slate-400 ml-2 font-mono">fairplay.app/dashboard</span>
+                                <span class="ml-auto bg-indigo-500/30 text-indigo-300 text-[9px] px-2 py-0.5 rounded-full font-semibold">Phase 1 &mdash; Hands-On</span>
+                            </div>
+                            <div class="bg-slate-900 p-3 space-y-2 text-[10px]">
+                                <!-- Progress bar -->
+                                <div class="flex items-center justify-between mb-1">
+                                    <span class="text-slate-400 text-[9px]">Pipeline Review Progress</span>
+                                    <span class="text-indigo-400 text-[9px] font-semibold">0 / 3 steps reviewed</span>
+                                </div>
+                                <div class="w-full bg-slate-800 rounded-full h-1.5">
+                                    <div class="bg-slate-700 h-1.5 rounded-full" style="width: 0%"></div>
+                                </div>
+                                <!-- Step 1 — required -->
+                                <div class="bg-slate-800 rounded-lg p-2.5 border border-indigo-500/30">
+                                    <div class="flex items-center gap-2 mb-1.5">
+                                        <i data-lucide="scan-search" class="w-3 h-3 text-indigo-400"></i>
+                                        <span class="text-indigo-400 font-semibold text-[9px]">Step 1 &mdash; Extract</span>
+                                        <span class="ml-auto bg-red-500/20 text-red-400 text-[8px] px-1.5 py-0.5 rounded font-semibold flex items-center gap-0.5">
+                                            <i data-lucide="alert-circle" class="w-2.5 h-2.5"></i> Review Required
+                                        </span>
+                                    </div>
+                                    <div class="flex flex-wrap gap-1 mb-1.5">
+                                        <span class="bg-indigo-500/20 text-indigo-300 text-[8px] px-1.5 py-0.5 rounded-full">attendance_policy</span>
+                                        <span class="bg-indigo-500/20 text-indigo-300 text-[8px] px-1.5 py-0.5 rounded-full">tardy</span>
+                                        <span class="bg-amber-500/20 text-amber-300 text-[8px] px-1.5 py-0.5 rounded-full">no_call_no_show</span>
+                                        <span class="bg-slate-600 text-slate-300 text-[8px] px-1.5 py-0.5 rounded-full">rolling_12mo</span>
+                                    </div>
+                                    <div class="flex items-center gap-1 pt-1.5 border-t border-slate-700">
+                                        <i data-lucide="user-check" class="w-2.5 h-2.5 text-amber-400"></i>
+                                        <span class="text-[8px] text-amber-400 font-medium">Your rating:</span>
+                                        <span class="bg-slate-700 text-slate-300 text-[8px] px-1.5 py-0.5 rounded cursor-default">Good</span>
+                                        <span class="bg-slate-700 text-slate-300 text-[8px] px-1.5 py-0.5 rounded cursor-default">Partial</span>
+                                        <span class="bg-slate-700 text-slate-300 text-[8px] px-1.5 py-0.5 rounded cursor-default">Bad</span>
+                                    </div>
+                                </div>
+                                <!-- Step 2 — required -->
+                                <div class="bg-slate-800 rounded-lg p-2.5 border border-amber-500/30">
+                                    <div class="flex items-center gap-2 mb-1.5">
+                                        <i data-lucide="list-tree" class="w-3 h-3 text-amber-400"></i>
+                                        <span class="text-amber-400 font-semibold text-[9px]">Step 2 &mdash; Plan</span>
+                                        <span class="bg-amber-500/20 text-amber-300 text-[8px] px-1.5 py-0.5 rounded-full">87% conf</span>
+                                        <span class="ml-auto bg-red-500/20 text-red-400 text-[8px] px-1.5 py-0.5 rounded font-semibold flex items-center gap-0.5">
+                                            <i data-lucide="alert-circle" class="w-2.5 h-2.5"></i> Review Required
+                                        </span>
+                                    </div>
+                                    <div class="space-y-1 text-[9px] text-slate-300 font-mono mb-1.5">
+                                        <p><span class="text-slate-500">1.</span> INSERT INTO <span class="text-indigo-400">policies</span></p>
+                                        <p><span class="text-slate-500">2.</span> INSERT INTO <span class="text-amber-400">rules</span> &times;4</p>
+                                        <p><span class="text-slate-500">3.</span> INSERT INTO <span class="text-emerald-400">escalation_levels</span> &times;4</p>
+                                    </div>
+                                    <div class="flex items-center gap-1 pt-1.5 border-t border-slate-700">
+                                        <i data-lucide="user-check" class="w-2.5 h-2.5 text-amber-400"></i>
+                                        <span class="text-[8px] text-amber-400 font-medium">Your rating:</span>
+                                        <span class="bg-slate-700 text-slate-300 text-[8px] px-1.5 py-0.5 rounded cursor-default">Good</span>
+                                        <span class="bg-slate-700 text-slate-300 text-[8px] px-1.5 py-0.5 rounded cursor-default">Partial</span>
+                                        <span class="bg-slate-700 text-slate-300 text-[8px] px-1.5 py-0.5 rounded cursor-default">Bad</span>
+                                    </div>
+                                </div>
+                                <!-- Step 3 — required -->
+                                <div class="bg-slate-800 rounded-lg p-2.5 border border-emerald-500/30">
+                                    <div class="flex items-center gap-2 mb-1.5">
+                                        <i data-lucide="database" class="w-3 h-3 text-emerald-400"></i>
+                                        <span class="text-emerald-400 font-semibold text-[9px]">Step 3 &mdash; Execute</span>
+                                        <span class="ml-auto bg-red-500/20 text-red-400 text-[8px] px-1.5 py-0.5 rounded font-semibold flex items-center gap-0.5">
+                                            <i data-lucide="alert-circle" class="w-2.5 h-2.5"></i> Sandbox Required
+                                        </span>
+                                    </div>
+                                    <div class="flex items-center gap-1 pt-1 border-t border-slate-700">
+                                        <i data-lucide="flask-conical" class="w-2.5 h-2.5 text-amber-400"></i>
+                                        <span class="text-[8px] text-slate-400">Must run sandbox &rarr; verify results before production</span>
+                                    </div>
+                                </div>
+                                <!-- Approve blocked -->
+                                <div class="flex items-center justify-between pt-1">
+                                    <span class="text-[8px] text-slate-600">3 steps &middot; all reviews pending</span>
+                                    <button class="bg-slate-700 text-slate-500 text-[9px] px-3 py-1 rounded-lg cursor-default flex items-center gap-1">
+                                        <i data-lucide="lock" class="w-2.5 h-2.5"></i> Approve (review all steps first)
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="text-[11px] text-slate-400 text-center mt-2">Every step requires human review before the pipeline can proceed.</p>
                     </div>
                 </div>
 
-                <!-- Phase 2 -->
-                <div class="relative reveal reveal-d2">
-                    <div class="bg-white rounded-xl p-6 card-shadow card-hover h-full">
-                        <div class="bg-amber-100 w-10 h-10 rounded-full flex items-center justify-center mb-4">
-                            <i data-lucide="trending-up" class="w-5 h-5 text-amber-600"></i>
+                <!-- ─── PHASE 2 — BUILDING TRUST ─── -->
+                <div class="grid md:grid-cols-2 gap-8 items-start reveal">
+                    <div class="md:pt-8 md:order-2">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="bg-amber-500 text-white w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm">2</div>
+                            <div>
+                                <p class="text-xs font-bold text-amber-600 uppercase tracking-wide">Phase 2</p>
+                                <h4 class="font-bold text-xl">Building Trust</h4>
+                            </div>
                         </div>
-                        <p class="text-xs font-bold text-amber-600 uppercase tracking-wide mb-1">Phase 2</p>
-                        <h4 class="font-bold text-lg mb-3">Building Trust</h4>
-                        <p class="text-sm text-slate-500 leading-relaxed">
-                            Trust high-confidence results. Focus your attention on what the system flags as uncertain.
+                        <p class="text-sm text-slate-600 leading-relaxed mb-3">
+                            High-confidence results auto-approve. You focus on what the system flags as uncertain.
+                            The interface becomes your <strong>audit panel</strong>.
                         </p>
+                        <div class="flex flex-wrap gap-2">
+                            <span class="bg-amber-100 text-amber-700 text-[10px] font-semibold px-2 py-1 rounded-full">Auto-approve &gt; 90%</span>
+                            <span class="bg-amber-100 text-amber-700 text-[10px] font-semibold px-2 py-1 rounded-full">Flag low confidence</span>
+                            <span class="bg-amber-100 text-amber-700 text-[10px] font-semibold px-2 py-1 rounded-full">Review exceptions</span>
+                        </div>
                     </div>
-                    <div class="hidden md:flex absolute top-1/2 -right-3 z-10 bg-white rounded-full p-1 shadow">
-                        <i data-lucide="chevron-right" class="w-4 h-4 text-slate-400"></i>
+                    <div class="reveal reveal-d1 md:order-1">
+                        <div class="browser-frame">
+                            <div class="browser-bar">
+                                <div class="browser-dot bg-red-400"></div>
+                                <div class="browser-dot bg-amber-400"></div>
+                                <div class="browser-dot bg-emerald-400"></div>
+                                <span class="text-xs text-slate-400 ml-2 font-mono">fairplay.app/dashboard</span>
+                                <span class="ml-auto bg-amber-500/30 text-amber-300 text-[9px] px-2 py-0.5 rounded-full font-semibold">Phase 2 &mdash; Assisted</span>
+                            </div>
+                            <div class="bg-slate-900 p-3 space-y-2 text-[10px]">
+                                <!-- Settings bar -->
+                                <div class="flex items-center gap-2 bg-slate-800 rounded-lg px-2.5 py-1.5">
+                                    <i data-lucide="sliders-horizontal" class="w-3 h-3 text-slate-400"></i>
+                                    <span class="text-[9px] text-slate-400">Auto-approve threshold:</span>
+                                    <span class="bg-amber-500/20 text-amber-300 text-[9px] px-2 py-0.5 rounded font-mono font-semibold">90%</span>
+                                    <span class="text-[9px] text-slate-600 ml-auto">Agreement rate: 94.2%</span>
+                                </div>
+                                <!-- Step 1 — auto-approved -->
+                                <div class="bg-slate-800 rounded-lg p-2.5 opacity-60">
+                                    <div class="flex items-center gap-2">
+                                        <i data-lucide="scan-search" class="w-3 h-3 text-indigo-400"></i>
+                                        <span class="text-indigo-400 font-semibold text-[9px]">Step 1 &mdash; Extract</span>
+                                        <span class="bg-emerald-500/20 text-emerald-400 text-[8px] px-1.5 py-0.5 rounded-full font-semibold">97% conf</span>
+                                        <span class="ml-auto bg-emerald-500/20 text-emerald-400 text-[8px] px-1.5 py-0.5 rounded font-semibold flex items-center gap-0.5">
+                                            <i data-lucide="check-circle" class="w-2.5 h-2.5"></i> Auto-approved
+                                        </span>
+                                    </div>
+                                </div>
+                                <!-- Step 2 — needs review (flagged) -->
+                                <div class="bg-slate-800 rounded-lg p-2.5 border border-amber-500/40">
+                                    <div class="flex items-center gap-2 mb-1.5">
+                                        <i data-lucide="list-tree" class="w-3 h-3 text-amber-400"></i>
+                                        <span class="text-amber-400 font-semibold text-[9px]">Step 2 &mdash; Plan</span>
+                                        <span class="bg-amber-500/20 text-amber-300 text-[8px] px-1.5 py-0.5 rounded-full">78% conf</span>
+                                        <span class="ml-auto bg-amber-500/20 text-amber-400 text-[8px] px-1.5 py-0.5 rounded font-semibold flex items-center gap-0.5">
+                                            <i data-lucide="alert-triangle" class="w-2.5 h-2.5"></i> Flagged
+                                        </span>
+                                    </div>
+                                    <div class="bg-amber-500/10 rounded p-1.5 mb-1.5">
+                                        <p class="text-[8px] text-amber-300"><i data-lucide="info" class="w-2.5 h-2.5 inline mr-0.5"></i> Low confidence on rule mapping &mdash; found 2 ambiguous escalation thresholds</p>
+                                    </div>
+                                    <div class="flex items-center gap-1 pt-1.5 border-t border-slate-700">
+                                        <i data-lucide="user-check" class="w-2.5 h-2.5 text-amber-400"></i>
+                                        <span class="text-[8px] text-amber-400 font-medium">Your review:</span>
+                                        <span class="bg-slate-700 text-slate-300 text-[8px] px-1.5 py-0.5 rounded cursor-default">Good</span>
+                                        <span class="bg-slate-700 text-slate-300 text-[8px] px-1.5 py-0.5 rounded cursor-default">Partial</span>
+                                        <span class="bg-slate-700 text-slate-300 text-[8px] px-1.5 py-0.5 rounded cursor-default">Bad</span>
+                                    </div>
+                                </div>
+                                <!-- Step 3 — auto-approved -->
+                                <div class="bg-slate-800 rounded-lg p-2.5 opacity-60">
+                                    <div class="flex items-center gap-2">
+                                        <i data-lucide="database" class="w-3 h-3 text-emerald-400"></i>
+                                        <span class="text-emerald-400 font-semibold text-[9px]">Step 3 &mdash; Execute</span>
+                                        <span class="bg-emerald-500/20 text-emerald-400 text-[8px] px-1.5 py-0.5 rounded-full font-semibold">95% conf</span>
+                                        <span class="ml-auto bg-emerald-500/20 text-emerald-400 text-[8px] px-1.5 py-0.5 rounded font-semibold flex items-center gap-0.5">
+                                            <i data-lucide="check-circle" class="w-2.5 h-2.5"></i> Auto-approved
+                                        </span>
+                                    </div>
+                                </div>
+                                <!-- Approve -->
+                                <div class="flex items-center justify-between pt-1">
+                                    <span class="text-[8px] text-slate-600">2 of 3 steps auto-approved &middot; 1 flagged for review</span>
+                                    <button class="bg-emerald-500 text-white text-[9px] px-3 py-1 rounded-lg cursor-default font-semibold flex items-center gap-1">
+                                        <i data-lucide="check" class="w-2.5 h-2.5"></i> Approve Flagged
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="text-[11px] text-slate-400 text-center mt-2">Only the flagged step needs your attention. High-confidence steps flow through.</p>
                     </div>
                 </div>
 
-                <!-- Phase 3 -->
-                <div class="reveal reveal-d3">
-                    <div class="bg-white rounded-xl p-6 card-shadow card-hover h-full">
-                        <div class="bg-emerald-100 w-10 h-10 rounded-full flex items-center justify-center mb-4">
-                            <i data-lucide="bot" class="w-5 h-5 text-emerald-600"></i>
+                <!-- ─── PHASE 3 — AUTONOMOUS ─── -->
+                <div class="grid md:grid-cols-2 gap-8 items-start reveal">
+                    <div class="md:pt-8">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="bg-emerald-500 text-white w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm">3</div>
+                            <div>
+                                <p class="text-xs font-bold text-emerald-600 uppercase tracking-wide">Phase 3</p>
+                                <h4 class="font-bold text-xl">Autonomous</h4>
+                            </div>
                         </div>
-                        <p class="text-xs font-bold text-emerald-600 uppercase tracking-wide mb-1">Phase 3</p>
-                        <h4 class="font-bold text-lg mb-3">Autonomous</h4>
-                        <p class="text-sm text-slate-500 leading-relaxed">
-                            Routine documents flow through automatically. You handle exceptions only.
+                        <p class="text-sm text-slate-600 leading-relaxed mb-3">
+                            The system processes documents overnight. You see a morning summary.
+                            Only genuine edge cases reach a human &mdash; unusual documents, ambiguous language,
+                            cross-jurisdictional conflicts. Everything routine is handled.
                         </p>
+                        <div class="flex flex-wrap gap-2">
+                            <span class="bg-emerald-100 text-emerald-700 text-[10px] font-semibold px-2 py-1 rounded-full">Overnight processing</span>
+                            <span class="bg-emerald-100 text-emerald-700 text-[10px] font-semibold px-2 py-1 rounded-full">Exceptions only</span>
+                            <span class="bg-emerald-100 text-emerald-700 text-[10px] font-semibold px-2 py-1 rounded-full">Human promoted</span>
+                        </div>
+                    </div>
+                    <div class="reveal reveal-d1">
+                        <div class="browser-frame">
+                            <div class="browser-bar">
+                                <div class="browser-dot bg-red-400"></div>
+                                <div class="browser-dot bg-amber-400"></div>
+                                <div class="browser-dot bg-emerald-400"></div>
+                                <span class="text-xs text-slate-400 ml-2 font-mono">fairplay.app/dashboard</span>
+                                <span class="ml-auto bg-emerald-500/30 text-emerald-300 text-[9px] px-2 py-0.5 rounded-full font-semibold">Phase 3 &mdash; Autonomous</span>
+                            </div>
+                            <div class="bg-slate-900 p-3 space-y-2.5 text-[10px]">
+                                <!-- Morning summary header -->
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <p class="text-slate-300 font-semibold text-[11px]">Overnight Processing Summary</p>
+                                        <p class="text-slate-600 text-[9px]">Mar 6, 2026 &middot; 2:00 AM &ndash; 6:00 AM</p>
+                                    </div>
+                                    <div class="bg-emerald-500/20 text-emerald-400 text-[9px] px-2 py-1 rounded-lg font-semibold">
+                                        98.3% auto-resolved
+                                    </div>
+                                </div>
+                                <!-- Stats row -->
+                                <div class="grid grid-cols-4 gap-2">
+                                    <div class="bg-slate-800 rounded-lg p-2 text-center">
+                                        <p class="text-slate-300 font-bold text-sm">12</p>
+                                        <p class="text-slate-500 text-[8px]">Processed</p>
+                                    </div>
+                                    <div class="bg-slate-800 rounded-lg p-2 text-center">
+                                        <p class="text-emerald-400 font-bold text-sm">10</p>
+                                        <p class="text-slate-500 text-[8px]">Auto-approved</p>
+                                    </div>
+                                    <div class="bg-slate-800 rounded-lg p-2 text-center">
+                                        <p class="text-amber-400 font-bold text-sm">2</p>
+                                        <p class="text-slate-500 text-[8px]">Flagged</p>
+                                    </div>
+                                    <div class="bg-slate-800 rounded-lg p-2 text-center">
+                                        <p class="text-red-400 font-bold text-sm">0</p>
+                                        <p class="text-slate-500 text-[8px]">Failed</p>
+                                    </div>
+                                </div>
+                                <!-- Auto-approved list (collapsed) -->
+                                <div class="bg-slate-800 rounded-lg p-2.5">
+                                    <div class="flex items-center gap-2">
+                                        <i data-lucide="check-circle" class="w-3 h-3 text-emerald-400"></i>
+                                        <span class="text-emerald-400 font-semibold text-[9px]">Auto-Approved (10)</span>
+                                        <i data-lucide="chevron-down" class="w-3 h-3 text-slate-600 ml-auto"></i>
+                                    </div>
+                                    <div class="mt-1.5 space-y-1">
+                                        <div class="flex items-center justify-between text-[8px] text-slate-400">
+                                            <span>HR-Policy-2025-East.pdf</span>
+                                            <span class="text-emerald-400">97%</span>
+                                        </div>
+                                        <div class="flex items-center justify-between text-[8px] text-slate-400">
+                                            <span>Attendance-Midwest-Q1.pdf</span>
+                                            <span class="text-emerald-400">95%</span>
+                                        </div>
+                                        <p class="text-[8px] text-slate-600">+ 8 more documents...</p>
+                                    </div>
+                                </div>
+                                <!-- Flagged items (needs attention) -->
+                                <div class="bg-slate-800 rounded-lg p-2.5 border border-amber-500/30">
+                                    <div class="flex items-center gap-2 mb-1.5">
+                                        <i data-lucide="alert-triangle" class="w-3 h-3 text-amber-400"></i>
+                                        <span class="text-amber-400 font-semibold text-[9px]">Needs Your Attention (2)</span>
+                                    </div>
+                                    <div class="space-y-1.5">
+                                        <div class="bg-amber-500/10 rounded p-1.5 flex items-center justify-between">
+                                            <div>
+                                                <p class="text-[9px] text-slate-300">Multi-State-Policy.pdf</p>
+                                                <p class="text-[8px] text-amber-300">Cross-jurisdictional conflict &mdash; CA vs. TX overtime rules</p>
+                                            </div>
+                                            <span class="bg-amber-500/20 text-amber-300 text-[8px] px-1.5 py-0.5 rounded shrink-0">62%</span>
+                                        </div>
+                                        <div class="bg-amber-500/10 rounded p-1.5 flex items-center justify-between">
+                                            <div>
+                                                <p class="text-[9px] text-slate-300">Contractor-Attendance.docx</p>
+                                                <p class="text-[8px] text-amber-300">Ambiguous &mdash; policy references external handbook</p>
+                                            </div>
+                                            <span class="bg-amber-500/20 text-amber-300 text-[8px] px-1.5 py-0.5 rounded shrink-0">71%</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- Action -->
+                                <div class="flex items-center justify-between pt-1">
+                                    <span class="text-[8px] text-slate-600">Next batch: tonight at 2:00 AM</span>
+                                    <button class="bg-amber-500 text-white text-[9px] px-3 py-1 rounded-lg cursor-default font-semibold flex items-center gap-1">
+                                        <i data-lucide="eye" class="w-2.5 h-2.5"></i> Review 2 Exceptions
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="text-[11px] text-slate-400 text-center mt-2">Morning summary. 10 policies handled overnight. Only 2 edge cases need you.</p>
                     </div>
                 </div>
+
             </div>
         </div>
     </section>
@@ -873,68 +1147,6 @@
     </section>
 
     <!-- ================================================================= -->
-    <!-- WHERE THIS IS HEADING -->
-    <!-- ================================================================= -->
-    <section class="bg-white py-20">
-        <div class="max-w-4xl mx-auto px-4">
-            <div class="text-center mb-12 reveal">
-                <p class="text-indigo-600 font-semibold text-sm uppercase tracking-wide mb-2">The Trajectory</p>
-                <h3 class="text-3xl font-bold mb-4">From Data Entry Clerk to Quality Supervisor</h3>
-                <p class="text-slate-500 max-w-lg mx-auto">
-                    The end goal isn't a better data-entry form. It's no data-entry form at all.
-                </p>
-            </div>
-
-            <div class="space-y-0 reveal reveal-d1">
-                <!-- Now -->
-                <div class="flex gap-4 items-start">
-                    <div class="flex flex-col items-center shrink-0">
-                        <div class="bg-indigo-500 text-white w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold">1</div>
-                        <div class="w-0.5 h-full bg-slate-200 min-h-[60px]"></div>
-                    </div>
-                    <div class="pb-8">
-                        <p class="font-semibold text-sm text-indigo-600 uppercase tracking-wide mb-1">Right Now</p>
-                        <p class="text-slate-600 text-sm leading-relaxed">
-                            You upload a document, review the extraction, check the plan, rate each step, and approve.
-                            The interface is your <strong>workspace</strong>.
-                        </p>
-                    </div>
-                </div>
-                <!-- Next -->
-                <div class="flex gap-4 items-start">
-                    <div class="flex flex-col items-center shrink-0">
-                        <div class="bg-amber-500 text-white w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold">2</div>
-                        <div class="w-0.5 h-full bg-slate-200 min-h-[60px]"></div>
-                    </div>
-                    <div class="pb-8">
-                        <p class="font-semibold text-sm text-amber-600 uppercase tracking-wide mb-1">Next</p>
-                        <p class="text-slate-600 text-sm leading-relaxed">
-                            You open a dashboard that shows what the system processed overnight &mdash;
-                            confidence scores, flagged anomalies, a summary of decisions made.
-                            The interface is your <strong>audit panel</strong>.
-                        </p>
-                    </div>
-                </div>
-                <!-- Eventually -->
-                <div class="flex gap-4 items-start">
-                    <div class="flex flex-col items-center shrink-0">
-                        <div class="bg-emerald-500 text-white w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold">3</div>
-                    </div>
-                    <div>
-                        <p class="font-semibold text-sm text-emerald-600 uppercase tracking-wide mb-1">Eventually</p>
-                        <p class="text-slate-600 text-sm leading-relaxed">
-                            The only things that reach a human are genuine edge cases &mdash;
-                            unusual documents, ambiguous language, cross-jurisdictional conflicts.
-                            Everything routine is handled. The human isn't removed from the process.
-                            They're <strong>promoted</strong>.
-                        </p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- ================================================================= -->
     <!-- CTA -->
     <!-- ================================================================= -->
     <section class="hero-bg text-white py-20">
@@ -958,7 +1170,7 @@
             <div class="flex items-center gap-2">
                 <i data-lucide="scale" class="w-3.5 h-3.5"></i>
                 <span>The Fair Play Initiative</span>
-                <span class="bg-slate-700 text-slate-400 font-mono px-1.5 py-0.5 rounded">v0.8.4</span>
+                <span class="bg-slate-700 text-slate-400 font-mono px-1.5 py-0.5 rounded">v0.8.5</span>
             </div>
             <a href="/dashboard" class="text-slate-500 hover:text-slate-300 transition">Go to Dashboard</a>
         </div>
