@@ -24,7 +24,7 @@
 
 - **Security:** SQL execution locked to Playground mode only (SQLite sandbox). Production PostgreSQL cannot execute AI-generated SQL.
 - **Compliance:** Every step produces a reviewable artifact. Human ratings persisted per step. Token usage, latency, model identity logged for traceability.
-- **Cost:** Target < $0.01 per policy. No fine-tuned models — prompt engineering + distillation only.
+- **Cost:** Target < $0.05 per policy (~$0.02–0.03 actual with gpt-5-mini). No fine-tuned models — prompt engineering + distillation only.
 
 ### Template 1: Supervised Pipeline *(High Control, Low Agency)*
 
@@ -48,7 +48,7 @@ LLM reads policy revisions → diffs against existing rules → updates autonomo
 |-----|---------------|---------------|------------|--------------|
 | **1** | 1 LLM call; single-shot extract+SQL; **black box** — opaque SQL, hard to verify what the AI decided | Meta-prompting (ChatGPT Playground, multi-shot samples) to define structured output shape + SQL plan templates; Pydantic models via `litellm + instructor` | Human reviews 100%; playground-only | Keyword accuracy, SQL validity, confidence |
 | **2** | 3 LLM calls — **decomposed because Itr 1 was a black box** (opaque SQL, no way to verify AI reasoning); **Extract:** ~10s/2.5K tok (gpt-4o-mini), ~31s/4.3K tok (gpt-5-mini); **Plan:** ~64s/9.5K tok (gpt-4o-mini), ~105s/13.3K tok (gpt-5-mini); **SQL:** ~52s/9.3K tok (gpt-5-mini) | Prompt distillation (Sonnet 4.6 → gpt-5-mini); per-step model selectors; **plan as verification gate**; **RAG experiment (negative result):** ChromaDB retrieval retrieved 97.3% of document (20/26 chunks), added 1.8x latency (584.8s vs 316.7s) and +80% tokens (64.6K vs 36K) — pure overhead for single-document exhaustive extraction. Full-text input is the right approach here; RAG adds value only for multi-document querying. | Human review at plan stage; rule exclusion guardrails (8 categories); rule count bounds (10–30); confidence deduction rubric | Rule count vs expected, plan–SQL alignment, per-step ratings, tokens per model per step |
-| **3** | 3 calls + feedback routing; **Full pipeline:** ~188s, ~27K tokens, < $0.01 per policy | Feedback loop: human ratings → model comparison → confidence thresholds; aggregated rating stats per model per step; **Prompt refinement:** killed `[PLACEHOLDER]` passthrough (resolve or NULL), added few-shot SQL example, field semantics in schema (code ≠ name, IANA timezone), explicit org/region metadata extraction targets, self-validation checklist | Rule exclusion guardrails; confidence deduction rubric; playground/production mode isolation; rollback on SQL failure; value traceability constraint; self-validation gate (no placeholder strings, FK consistency) | Model rating % (good/partial/bad), cost per policy, time-to-ingest, placeholder leak rate (target: 0%) |
+| **3** | 3 calls + feedback routing; **Full pipeline:** ~188s, ~27K tokens, ~$0.02–0.03 per policy | Feedback loop: human ratings → model comparison → confidence thresholds; aggregated rating stats per model per step; **Prompt refinement:** killed `[PLACEHOLDER]` passthrough (resolve or NULL), added few-shot SQL example, field semantics in schema (code ≠ name, IANA timezone), explicit org/region metadata extraction targets, self-validation checklist | Rule exclusion guardrails; confidence deduction rubric; playground/production mode isolation; rollback on SQL failure; value traceability constraint; self-validation gate (no placeholder strings, FK consistency) | Model rating % (good/partial/bad), cost per policy, time-to-ingest, placeholder leak rate (target: 0%) |
 
 ### Production Model Stats (from Supabase `analysis_logs`)
 
@@ -89,6 +89,28 @@ LLM reads policy revisions → diffs against existing rules → updates autonomo
   ──────────────────────────────────────────────────────
   ➜ Solution: Decompose into 3 transparent steps (Itr 2)
 ```
+
+### Decomposition Strategy — The Key Pivot
+
+Iteration 1's black box forced a fundamental rethink. Instead of one monolithic LLM call that goes from document → SQL, we decomposed into **3 transparent stages**, each producing a reviewable artifact:
+
+```
+ BEFORE (Itr 1)                          AFTER (Itr 2+)
+ ─────────────                           ─────────────
+ Document → [BLACK BOX] → SQL            Document → EXTRACT → PLAN → SQL
+                                                      ↓         ↓        ↓
+ Human can see output,                          "I found    "I'll    "Here's
+ can't verify reasoning                          these"     do this"  the code"
+```
+
+**Why this works:**
+
+1. **Each step = reviewable artifact** — no more opaque outputs
+2. **Each step = different model** — expensive where quality matters (Plan), cheap where mechanical (Extract, SQL)
+3. **Plan = human checkpoint** — separates "what did the AI understand?" from "what code will it generate?"
+4. **Errors are localized** — bad SQL? Check the Plan. Bad Plan? Check the Extraction.
+
+This decomposition enabled every subsequent optimization: prompt distillation, per-step feedback, model comparison, and the trust lifecycle.
 
 ### Iteration 2 — Decomposed Pipeline (Transparent)
 

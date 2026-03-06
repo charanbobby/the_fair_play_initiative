@@ -24,7 +24,7 @@
 
 - **Security:** SQL execution is locked to Playground mode only (SQLite sandbox). Production PostgreSQL deployments cannot execute AI-generated SQL. Playground can be reset/seeded at any time without risk.
 - **Compliance:** Every pipeline step produces a reviewable artifact. Human ratings (Good / Partial / Bad) are persisted per step. Token usage, latency, and model identity logged to `AnalysisLog` for full traceability.
-- **Cost:** Target under $0.01 per policy analysis. No fine-tuned models — only prompt engineering, prompt distillation, and few-shot examples to maintain iteration speed and cost predictability.
+- **Cost:** Target under $0.05 per policy analysis (~$0.02–0.03 actual with gpt-5-mini). No fine-tuned models — only prompt engineering, prompt distillation, and few-shot examples to maintain iteration speed and cost predictability.
 
 ### Template 1: Supervised Pipeline *(High Control, Low Agency)*
 
@@ -148,6 +148,27 @@ Ratings stored in `AnalysisFeedback` table with: step, rating, llm_model, filena
 - Total runs
 
 This data is what makes the Phase 1 → Phase 2 transition possible: when a model consistently rates >90% Good on a step, that step can be auto-approved.
+
+### Decomposition Strategy (proven technique)
+
+Iteration 1 produced a single-shot black box — one LLM call that went from raw document to SQL in a single step. The output was impossible to verify: you could see the final SQL, but you had no way to know *why* the AI chose those tables, joins, or values.
+
+**The fix: step-by-step decomposition into 3 transparent stages.**
+
+| Step | Purpose | Artifact Produced | Why It Matters |
+|------|---------|-------------------|----------------|
+| **1. Extract** | Identify what the document contains | Keyword chips mapped to 8 schema categories | Human can verify "did the AI find the right things?" |
+| **2. Plan** | Decide what to do with the extracted data | Structured ingestion plan — table-by-table INSERT steps, rule rows, confidence scores | **The verification gate** — a compliance officer can read and approve this before any SQL runs |
+| **3. SQL** | Generate executable code from the plan | SQL INSERT statements following FK constraints | Follows the plan mechanically — cheaper models sufficient |
+
+**Why decomposition works here:**
+
+1. **Each step produces a reviewable artifact** — no more black boxes
+2. **Each step can use a different model** — expensive models where quality matters (Plan), cheap models where the task is mechanical (Extract, SQL)
+3. **The Plan step is the human checkpoint** — it separates "what did the AI understand?" from "what code will it generate?"
+4. **Errors are localized** — if the SQL is wrong, you check the Plan. If the Plan is wrong, you check the Extraction. No need to debug a monolithic prompt.
+
+This decomposition is what enabled every subsequent optimization: prompt distillation (below), per-step feedback, model comparison, and the trust lifecycle.
 
 ### Prompt Distillation (proven technique)
 
