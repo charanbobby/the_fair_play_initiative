@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, File, s
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.database import get_db
+from app.database import get_db, get_analytics_db
 from app import models
 from app.schemas import (
     ExecuteSQLRequest,
@@ -93,6 +93,7 @@ async def analyze_policy(
     model_sql: Optional[str] = None,
     execute: bool = False,
     db: Session = Depends(get_db),
+    analytics_db: Session = Depends(get_analytics_db),
 ):
     """
     Analyse a policy document and receive:
@@ -155,12 +156,12 @@ async def analyze_policy(
             query_results = execute_sql_against_db(db, result.sql_result, is_sqlite)
             result.query_results = query_results
 
-        # Auto-save analysis logs for token tracking (non-fatal)
+        # Auto-save analysis logs to analytics DB (always PG, non-fatal)
         try:
             default_model = settings.LLM_MODEL or "gpt-4o-mini"
             usage = result.token_usage
             if usage:
-                db.add(models.AnalysisLog(
+                analytics_db.add(models.AnalysisLog(
                     filename=filename,
                     step="extract",
                     llm_model=model_extract or default_model,
@@ -169,7 +170,7 @@ async def analyze_policy(
                     total_tokens=usage.extract_total,
                     duration_ms=usage.extract_duration_ms,
                 ))
-                db.add(models.AnalysisLog(
+                analytics_db.add(models.AnalysisLog(
                     filename=filename,
                     step="plan",
                     llm_model=model_plan or default_model,
@@ -179,7 +180,7 @@ async def analyze_policy(
                     duration_ms=usage.plan_duration_ms,
                 ))
                 if usage.sql_total > 0:
-                    db.add(models.AnalysisLog(
+                    analytics_db.add(models.AnalysisLog(
                         filename=filename,
                         step="sql",
                         llm_model=model_sql or default_model,
@@ -188,11 +189,11 @@ async def analyze_policy(
                         total_tokens=usage.sql_total,
                         duration_ms=usage.sql_duration_ms,
                     ))
-                db.commit()
+                analytics_db.commit()
         except Exception:
             import logging
             logging.getLogger(__name__).warning("Failed to save analysis logs", exc_info=True)
-            db.rollback()
+            analytics_db.rollback()
 
         return result
     except ValueError as exc:
@@ -213,6 +214,7 @@ async def analyze_policy_stream(
     model_plan: Optional[str] = None,
     model_sql: Optional[str] = None,
     db: Session = Depends(get_db),
+    analytics_db: Session = Depends(get_analytics_db),
 ):
     """
     Stream policy analysis results as Server-Sent Events.
@@ -257,6 +259,7 @@ async def analyze_policy_stream(
             model_plan=model_plan,
             model_sql=model_sql,
             db=db,
+            analytics_db=analytics_db,
             default_model=settings.LLM_MODEL,
         ):
             yield event

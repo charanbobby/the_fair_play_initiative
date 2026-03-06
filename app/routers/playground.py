@@ -26,9 +26,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/playground", tags=["playground"])
 
 # Tables to truncate in reverse-FK order (children first)
+# NOTE: AnalysisFeedback and AnalysisLog live in the analytics DB (always PG)
+# and are intentionally excluded — playground reset should not wipe them.
 _TRUNCATE_ORDER = [
-    models.AnalysisFeedback,
-    models.AnalysisLog,
     models.Alert,
     models.AttendanceLog,
     models.PointHistory,

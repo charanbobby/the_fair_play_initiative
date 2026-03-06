@@ -3,10 +3,10 @@ app/database.py
 ---------------
 SQLAlchemy 2.0 database setup.
 
-- engine: SQLite by default (swappable via DATABASE_URL env var)
-- SessionLocal: per-request session factory
+- engine / SessionLocal / get_db: main database (SQLite or PG)
+- analytics_engine / AnalyticsSessionLocal / get_analytics_db:
+      always PostgreSQL so feedback + analysis_logs persist across sessions
 - Base: declarative base for all ORM models
-- get_db: FastAPI dependency that yields a scoped session
 """
 
 from __future__ import annotations
@@ -88,10 +88,71 @@ class Base(DeclarativeBase):
 
 
 # ---------------------------------------------------------------------------
+# Analytics engine — always PostgreSQL so feedback/logs survive across sessions
+# Falls back to the main engine when ANALYTICS_DATABASE_URL is not set and
+# DATABASE_URL is already PostgreSQL.
+# ---------------------------------------------------------------------------
+_analytics_url = settings.ANALYTICS_DATABASE_URL
+
+if _analytics_url and _analytics_url.startswith("postgresql"):
+    from urllib.parse import urlparse as _a_urlparse
+    import psycopg2 as _a_psycopg2
+
+    _a_parsed = _a_urlparse(_analytics_url)
+    _a_user = _a_parsed.username or "postgres"
+    _a_pass = _a_parsed.password or ""
+    _a_host = _a_parsed.hostname or "localhost"
+    _a_port = _a_parsed.port or 6543
+    _a_db = (_a_parsed.path or "/postgres").lstrip("/") or "postgres"
+
+    logger.info(
+        "Analytics PostgreSQL: user=%s host=%s port=%s db=%s",
+        _a_user, _a_host, _a_port, _a_db,
+    )
+
+    def _analytics_pg_creator():
+        return _a_psycopg2.connect(
+            host=_a_host,
+            port=_a_port,
+            user=_a_user,
+            password=_a_pass,
+            dbname=_a_db,
+            sslmode="require",
+        )
+
+    analytics_engine = create_engine(
+        "postgresql+psycopg2://",
+        creator=_analytics_pg_creator,
+        pool_pre_ping=True,
+        echo=False,
+    )
+elif _raw_url.startswith("postgresql"):
+    # No separate ANALYTICS_DATABASE_URL but main DB is already PG — reuse it
+    analytics_engine = engine
+else:
+    # Both are SQLite — analytics will use SQLite too (dev-only fallback)
+    logger.warning("No PostgreSQL URL for analytics — feedback will use SQLite (not persistent)")
+    analytics_engine = engine
+
+AnalyticsSessionLocal = sessionmaker(
+    autocommit=False, autoflush=False, bind=analytics_engine,
+)
+
+
+# ---------------------------------------------------------------------------
 # FastAPI dependency — yields a DB session, closes it on exit
 # ---------------------------------------------------------------------------
 def get_db():
     db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def get_analytics_db():
+    """Yields a session bound to the analytics (PostgreSQL) engine."""
+    db = AnalyticsSessionLocal()
     try:
         yield db
     finally:

@@ -25,6 +25,10 @@ class Settings:
     # Database
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./fpi.db")
 
+    # Analytics DB — always PostgreSQL so feedback/logs persist across sessions.
+    # Falls back to DATABASE_URL if not set (works when DATABASE_URL is already PG).
+    ANALYTICS_DATABASE_URL: str = os.getenv("ANALYTICS_DATABASE_URL", "")
+
     # Playground mode — set PLAYGROUND_MODE=true to enable the playground UI.
     # When not set, auto-detects from DATABASE_URL (sqlite = playground).
     _PLAYGROUND_MODE_RAW: str = os.getenv("PLAYGROUND_MODE", "auto")

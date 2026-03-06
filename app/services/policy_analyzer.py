@@ -738,6 +738,7 @@ async def stream_policy_analysis(
     model_plan: str | None = None,
     model_sql: str | None = None,
     db=None,
+    analytics_db=None,
     default_model: str | None = None,
 ) -> AsyncGenerator[str, None]:
     """
@@ -861,13 +862,14 @@ async def stream_policy_analysis(
                 })
                 _log_entries.append(("sql", model_sql, st, state_update.get("sql_duration_ms", 0)))
 
-    # Save analysis logs before done event
-    if db and _log_entries:
+    # Save analysis logs to analytics DB (always PG) before done event
+    _log_db = analytics_db or db
+    if _log_db and _log_entries:
         try:
             from app import models
             _default = default_model or settings.LLM_MODEL or "gpt-4o-mini"
             for step, model_override, tokens, duration in _log_entries:
-                db.add(models.AnalysisLog(
+                _log_db.add(models.AnalysisLog(
                     filename=filename,
                     step=step,
                     llm_model=model_override or _default,
@@ -876,9 +878,9 @@ async def stream_policy_analysis(
                     total_tokens=tokens.get("total", 0),
                     duration_ms=duration,
                 ))
-            db.commit()
+            _log_db.commit()
         except Exception:
             log.warning("Failed to save analysis logs", exc_info=True)
-            db.rollback()
+            _log_db.rollback()
 
     yield _sse_event("done", {"filename": filename})

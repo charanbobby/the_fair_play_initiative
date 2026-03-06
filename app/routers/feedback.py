@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy import case, func as sa_func
 from sqlalchemy.orm import Session
 
-from app.database import get_db
+from app.database import get_analytics_db
 from app import models
 from app.schemas import FeedbackCreate, FeedbackResponse, ModelRatingStats
 
@@ -23,7 +23,7 @@ router = APIRouter(prefix="/feedback", tags=["feedback"])
 
 
 @router.post("", response_model=FeedbackResponse, status_code=status.HTTP_201_CREATED)
-def submit_feedback(body: FeedbackCreate, db: Session = Depends(get_db)):
+def submit_feedback(body: FeedbackCreate, db: Session = Depends(get_analytics_db)):
     fb = models.AnalysisFeedback(**body.model_dump())
     db.add(fb)
     db.commit()
@@ -35,7 +35,7 @@ def submit_feedback(body: FeedbackCreate, db: Session = Depends(get_db)):
 def get_stats(
     step: Optional[str] = None,
     llm_model: Optional[str] = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_analytics_db),
 ):
     """Return aggregated rating percentages + avg token usage per (model, step)."""
     results: list[ModelRatingStats] = []
