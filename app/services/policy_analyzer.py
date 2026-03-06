@@ -530,47 +530,46 @@ def _rewrite_table_names(sql: str) -> str:
 def _rewrite_sqlite_to_pg(sql: str) -> str:
     """Convert SQLite INSERT syntax to PostgreSQL equivalents.
 
-    - INSERT OR IGNORE INTO t (...) VALUES (...) → INSERT INTO t (...) VALUES (...) ON CONFLICT DO NOTHING
-    - INSERT OR REPLACE INTO t (cols) VALUES (vals) → INSERT INTO t (cols) VALUES (vals) ON CONFLICT (id) DO UPDATE SET col=EXCLUDED.col, ...
+    Processes each statement individually (via quote-aware splitter) so
+    unescaped apostrophes inside LLM-generated string literals don't
+    break the rewrite.
 
-    The VALUES regex uses a quote-aware pattern so that semicolons
-    inside string literals (e.g. ``'...time; single...'``) are not
-    mistaken for statement terminators.
+    - INSERT OR IGNORE  → append ON CONFLICT DO NOTHING
+    - INSERT OR REPLACE → append ON CONFLICT (id) DO UPDATE SET ...
     """
+    stmts = _split_sql_statements(sql)
+    result: list[str] = []
 
-    # Pattern fragment: match VALUES(...) respecting quoted strings.
-    # Matches: single-quoted strings (with '' escapes), or any char that is
-    # not a closing paren, consuming everything inside the VALUES parens.
-    _VALUES_BODY = r"\((?:[^')]|'(?:[^']|'')*')*\)"
+    for stmt in stmts:
+        upper = stmt.upper()
 
-    def _replace_or_replace(m: re.Match) -> str:
-        table = m.group("table")
-        cols_str = m.group("cols")
-        vals = m.group("vals")
-        cols = [c.strip() for c in cols_str.split(",")]
-        update_cols = [c for c in cols if c != "id"]
-        set_clause = ", ".join(f"{c} = EXCLUDED.{c}" for c in update_cols)
-        if set_clause:
-            return f"INSERT INTO {table} ({cols_str}) VALUES {vals} ON CONFLICT (id) DO UPDATE SET {set_clause}"
-        return f"INSERT INTO {table} ({cols_str}) VALUES {vals} ON CONFLICT (id) DO NOTHING"
+        if "INSERT OR IGNORE" in upper:
+            # Remove "OR IGNORE", append ON CONFLICT DO NOTHING
+            new = re.sub(r"INSERT\s+OR\s+IGNORE\s+INTO", "INSERT INTO", stmt, flags=re.IGNORECASE)
+            new += " ON CONFLICT DO NOTHING"
+            result.append(new)
 
-    # INSERT OR IGNORE → ON CONFLICT DO NOTHING
-    sql = re.sub(
-        r"INSERT\s+OR\s+IGNORE\s+INTO\s+(\S+)\s*\(([^)]+)\)\s*VALUES\s*(?P<vals>" + _VALUES_BODY + r")",
-        lambda m: f"INSERT INTO {m.group(1)} ({m.group(2)}) VALUES {m.group('vals')} ON CONFLICT DO NOTHING",
-        sql,
-        flags=re.IGNORECASE | re.DOTALL,
-    )
+        elif "INSERT OR REPLACE" in upper:
+            # Remove "OR REPLACE", extract column list for ON CONFLICT UPDATE
+            new = re.sub(r"INSERT\s+OR\s+REPLACE\s+INTO", "INSERT INTO", stmt, flags=re.IGNORECASE)
+            # Extract column names from the first parenthesised group after INTO table
+            cols_match = re.search(r"INTO\s+\S+\s*\(([^)]+)\)", new, re.IGNORECASE)
+            if cols_match:
+                cols = [c.strip() for c in cols_match.group(1).split(",")]
+                update_cols = [c for c in cols if c != "id"]
+                if update_cols:
+                    set_clause = ", ".join(f"{c} = EXCLUDED.{c}" for c in update_cols)
+                    new += f" ON CONFLICT (id) DO UPDATE SET {set_clause}"
+                else:
+                    new += " ON CONFLICT (id) DO NOTHING"
+            else:
+                new += " ON CONFLICT DO NOTHING"
+            result.append(new)
 
-    # INSERT OR REPLACE → ON CONFLICT (id) DO UPDATE SET ...
-    sql = re.sub(
-        r"INSERT\s+OR\s+REPLACE\s+INTO\s+(?P<table>\S+)\s*\((?P<cols>[^)]+)\)\s*VALUES\s*(?P<vals>" + _VALUES_BODY + r")",
-        _replace_or_replace,
-        sql,
-        flags=re.IGNORECASE | re.DOTALL,
-    )
+        else:
+            result.append(stmt)
 
-    return sql
+    return ";\n".join(result)
 
 
 def _split_sql_statements(sql: str) -> list[str]:
