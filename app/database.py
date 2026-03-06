@@ -12,6 +12,7 @@ SQLAlchemy 2.0 database setup.
 from __future__ import annotations
 
 from sqlalchemy import create_engine
+from sqlalchemy.engine import URL
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from app.config import settings
@@ -19,18 +20,33 @@ from app.config import settings
 # ---------------------------------------------------------------------------
 # Engine
 # SQLite needs check_same_thread=False for multi-threaded use.
-# For Postgres, the connect_args dict is ignored.
+# Supabase pooler uses dotted usernames (postgres.ref) which SQLAlchemy's
+# string URL parser mishandles, so we build the URL object explicitly.
 # ---------------------------------------------------------------------------
-_db_url = settings.DATABASE_URL
+_raw_url = settings.DATABASE_URL
 connect_args: dict = {}
-if _db_url.startswith("sqlite"):
+
+if _raw_url.startswith("sqlite"):
     connect_args = {"check_same_thread": False}
-elif _db_url.startswith("postgresql") and "sslmode" not in _db_url:
-    # Supabase pooler requires SSL
-    _db_url += "?sslmode=require" if "?" not in _db_url else "&sslmode=require"
+    _engine_url = _raw_url
+elif _raw_url.startswith("postgresql"):
+    # Use Python's urlparse (handles dots in username correctly)
+    from urllib.parse import urlparse
+    _parsed = urlparse(_raw_url)
+    _engine_url = URL.create(
+        "postgresql+psycopg2",
+        username=_parsed.username,
+        password=_parsed.password,
+        host=_parsed.hostname,
+        port=_parsed.port,
+        database=(_parsed.path or "/postgres").lstrip("/"),
+        query={"sslmode": "require"},
+    )
+else:
+    _engine_url = _raw_url
 
 engine = create_engine(
-    _db_url,
+    _engine_url,
     connect_args=connect_args,
     echo=False,  # set True to log SQL queries during development
 )
