@@ -48,6 +48,7 @@ else:
 engine = create_engine(
     _engine_url,
     connect_args=connect_args,
+    pool_pre_ping=True,
     echo=False,  # set True to log SQL queries during development
 )
 

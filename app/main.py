@@ -77,16 +77,19 @@ STATIC_DIR = Path(__file__).parent / "static"
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _llm
-    logger.info("startup: creating database tables")
-    models.Base.metadata.create_all(bind=engine)
-
-    logger.info("startup: seeding database")
-    from app.seed import seed
-    db = SessionLocal()
     try:
-        seed(db)
-    finally:
-        db.close()
+        logger.info("startup: creating database tables")
+        models.Base.metadata.create_all(bind=engine)
+
+        logger.info("startup: seeding database")
+        from app.seed import seed
+        db = SessionLocal()
+        try:
+            seed(db)
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.warning("startup: database init failed (will retry on first request): %s", exc)
 
     logger.info("startup: initialising LLM provider")
     _llm = get_llm()
