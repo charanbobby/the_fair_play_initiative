@@ -525,6 +525,43 @@ def _rewrite_table_names(sql: str) -> str:
     return sql
 
 
+def _rewrite_sqlite_to_pg(sql: str) -> str:
+    """Convert SQLite INSERT syntax to PostgreSQL equivalents.
+
+    - INSERT OR IGNORE INTO t (...) VALUES (...) → INSERT INTO t (...) VALUES (...) ON CONFLICT DO NOTHING
+    - INSERT OR REPLACE INTO t (cols) VALUES (vals) → INSERT INTO t (cols) VALUES (vals) ON CONFLICT (id) DO UPDATE SET col=EXCLUDED.col, ...
+    """
+
+    def _replace_or_replace(m: re.Match) -> str:
+        table = m.group("table")
+        cols_str = m.group("cols")
+        rest = m.group("rest")
+        cols = [c.strip() for c in cols_str.split(",")]
+        update_cols = [c for c in cols if c != "id"]
+        set_clause = ", ".join(f"{c} = EXCLUDED.{c}" for c in update_cols)
+        if set_clause:
+            return f"INSERT INTO {table} ({cols_str}) VALUES {rest} ON CONFLICT (id) DO UPDATE SET {set_clause}"
+        return f"INSERT INTO {table} ({cols_str}) VALUES {rest} ON CONFLICT (id) DO NOTHING"
+
+    # INSERT OR IGNORE → ON CONFLICT DO NOTHING
+    sql = re.sub(
+        r"INSERT\s+OR\s+IGNORE\s+INTO\s+(\S+)\s*\(([^)]+)\)\s*VALUES\s*(.+?)(?=;|$)",
+        lambda m: f"INSERT INTO {m.group(1)} ({m.group(2)}) VALUES {m.group(3)} ON CONFLICT DO NOTHING",
+        sql,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+
+    # INSERT OR REPLACE → ON CONFLICT (id) DO UPDATE SET ...
+    sql = re.sub(
+        r"INSERT\s+OR\s+REPLACE\s+INTO\s+(?P<table>\S+)\s*\((?P<cols>[^)]+)\)\s*VALUES\s*(?P<rest>.+?)(?=;|$)",
+        _replace_or_replace,
+        sql,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+
+    return sql
+
+
 def execute_sql_against_db(
     db,
     sql_result: SQLGeneration,
@@ -547,6 +584,8 @@ def execute_sql_against_db(
         return QueryResults(error="Empty SQL query")
 
     rewritten_sql = _rewrite_table_names(raw_sql)
+    if not is_sqlite:
+        rewritten_sql = _rewrite_sqlite_to_pg(rewritten_sql)
 
     try:
         if is_sqlite:
