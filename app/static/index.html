@@ -113,25 +113,18 @@
               <h1 class="text-xl font-bold">The Fair Play Initiative</h1>
               <p class="text-xs text-slate-400">
                 Balanced Attendance Management
-                <span class="ml-2 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.7.0</span>
+                <span class="ml-2 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.7.1</span>
                 <span id="playground-badge" class="ml-1 bg-amber-500 text-amber-50 text-xs font-mono px-1.5 py-0.5 rounded hidden">Playground</span>
               </p>
             </div>
           </div>
           <div class="flex items-center gap-4">
-            <!-- Playground Toggle (hidden until status check) -->
-            <div id="playground-toggle" class="hidden flex items-center gap-2 bg-slate-700/50 px-3 py-1.5 rounded-lg cursor-pointer select-none" onclick="togglePlaygroundInfo()">
-              <i data-lucide="flask-conical" class="w-4 h-4 text-amber-400"></i>
-              <span class="text-xs font-medium text-slate-300">Playground</span>
-              <div class="relative w-8 h-4 rounded-full bg-amber-500/80 transition-colors">
-                <div class="absolute top-0.5 left-4 w-3 h-3 rounded-full bg-white shadow transition-all"></div>
-              </div>
-            </div>
-            <div id="production-toggle" class="hidden flex items-center gap-2 bg-slate-700/50 px-3 py-1.5 rounded-lg">
-              <i data-lucide="shield-check" class="w-4 h-4 text-emerald-400"></i>
-              <span class="text-xs font-medium text-slate-300">Production</span>
-              <div class="relative w-8 h-4 rounded-full bg-slate-600 transition-colors">
-                <div class="absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-slate-400 shadow transition-all"></div>
+            <!-- Mode Toggle (hidden until status check) -->
+            <div id="mode-toggle" class="hidden items-center gap-2 bg-slate-700/50 px-3 py-1.5 rounded-lg cursor-pointer select-none" onclick="togglePlaygroundInfo()">
+              <i id="mode-icon" data-lucide="flask-conical" class="w-4 h-4 text-amber-400"></i>
+              <span id="mode-label" class="text-xs font-medium text-slate-300">Playground</span>
+              <div id="toggle-track" class="relative w-9 h-5 rounded-full bg-amber-500 transition-colors duration-200">
+                <div id="toggle-dot" class="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200" style="left: 18px;"></div>
               </div>
             </div>
             <button
@@ -3622,16 +3615,18 @@
           const data = await res.json();
           _isPlayground = data.is_playground;
           _samplePolicies = data.sample_policies || [];
+          // Always show the mode toggle
+          const modeToggle = document.getElementById("mode-toggle");
+          if (modeToggle) modeToggle.style.display = "flex";
           if (_isPlayground) {
+            _playgroundBannerVisible = true;
             showPlaygroundBanner();
             addSamplePolicyButtons();
             const badge = document.getElementById("playground-badge");
             if (badge) badge.classList.remove("hidden");
-            const pgToggle = document.getElementById("playground-toggle");
-            if (pgToggle) pgToggle.classList.remove("hidden");
+            updateToggleVisual(true);
           } else {
-            const prodToggle = document.getElementById("production-toggle");
-            if (prodToggle) prodToggle.classList.remove("hidden");
+            updateToggleVisual(false);
           }
         } catch (err) {
           console.warn("Playground status check failed:", err);
@@ -3674,7 +3669,7 @@
                   </button>
                 </div>
               </div>
-              <button onclick="document.getElementById('playground-banner').classList.add('hidden')"
+              <button onclick="togglePlaygroundInfo()"
                 class="text-amber-400 hover:text-amber-600 flex-shrink-0 p-1">
                 <i data-lucide="x" class="w-4 h-4"></i>
               </button>
@@ -3686,11 +3681,43 @@
         lucide.createIcons();
       }
 
+      let _playgroundBannerVisible = false;
+
+      function updateToggleVisual(isOn) {
+        const track = document.getElementById("toggle-track");
+        const dot = document.getElementById("toggle-dot");
+        const icon = document.getElementById("mode-icon");
+        const label = document.getElementById("mode-label");
+        const badge = document.getElementById("playground-badge");
+        if (!track || !dot) return;
+
+        if (isOn) {
+          track.className = "relative w-9 h-5 rounded-full bg-amber-500 transition-colors duration-200";
+          dot.style.left = "18px";
+          if (icon) icon.className = "w-4 h-4 text-amber-400";
+          if (label) { label.textContent = "Playground"; label.className = "text-xs font-medium text-amber-300"; }
+          if (badge) badge.classList.remove("hidden");
+        } else {
+          track.className = "relative w-9 h-5 rounded-full bg-slate-600 transition-colors duration-200";
+          dot.style.left = "2px";
+          if (icon) icon.className = "w-4 h-4 text-slate-400";
+          if (label) { label.textContent = _isPlayground ? "Playground" : "Production"; label.className = "text-xs font-medium text-slate-400"; }
+          if (badge) badge.classList.add("hidden");
+        }
+      }
+
       function togglePlaygroundInfo() {
+        if (!_isPlayground) return; // production mode — toggle is informational only
+        _playgroundBannerVisible = !_playgroundBannerVisible;
         const banner = document.getElementById("playground-banner");
         if (banner) {
-          banner.classList.toggle("hidden");
+          if (_playgroundBannerVisible) {
+            banner.classList.remove("hidden");
+          } else {
+            banner.classList.add("hidden");
+          }
         }
+        updateToggleVisual(_playgroundBannerVisible);
       }
 
       async function resetPlayground() {
