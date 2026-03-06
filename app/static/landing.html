@@ -3,7 +3,20 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>The Fair Play Initiative — Beyond the Form</title>
+    <title>The Fair Play Initiative — AI-Powered Policy Analysis</title>
+    <meta name="description" content="Upload HR policies, let AI extract the rules and propose a plan, then approve or reject before anything hits your database." />
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="The Fair Play Initiative" />
+    <meta property="og:description" content="AI reads your policy documents. Humans verify the plan. The system executes. Enterprise-reliable document processing." />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="/static/og-preview.png" />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="The Fair Play Initiative" />
+    <meta name="twitter:description" content="AI reads your policy documents. Humans verify the plan. The system executes." />
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
@@ -14,22 +27,47 @@
         .card-shadow { box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06); }
         .card-hover { transition: all 0.2s ease; }
         .card-hover:hover { transform: translateY(-4px); box-shadow: 0 12px 28px -5px rgba(0,0,0,0.12); }
-        .fade-in { animation: fadeIn 0.6s ease-out; }
-        .fade-in-delay { animation: fadeIn 0.6s ease-out 0.2s both; }
-        .fade-in-delay-2 { animation: fadeIn 0.6s ease-out 0.4s both; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
-        .pipeline-line { position: relative; }
-        .pipeline-line::after {
-            content: '';
-            position: absolute;
-            top: 50%;
-            right: -2rem;
-            width: 2rem;
-            height: 2px;
-            background: #cbd5e1;
+
+        /* Staggered fade-in on scroll */
+        .reveal { opacity: 0; transform: translateY(20px); transition: opacity 0.6s ease, transform 0.6s ease; }
+        .reveal.visible { opacity: 1; transform: translateY(0); }
+        .reveal-d1 { transition-delay: 0.1s; }
+        .reveal-d2 { transition-delay: 0.2s; }
+        .reveal-d3 { transition-delay: 0.3s; }
+
+        /* Pipeline connector arrows (desktop only) */
+        .pipeline-arrow { display: none; }
+        @media (min-width: 768px) {
+            .pipeline-arrow {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                position: absolute;
+                top: 50%;
+                right: -1.25rem;
+                transform: translateY(-50%);
+                z-index: 10;
+            }
         }
-        @media (max-width: 768px) {
-            .pipeline-line::after { display: none; }
+
+        /* Screenshot mockup frame */
+        .browser-frame {
+            border-radius: 0.75rem;
+            overflow: hidden;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.4);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .browser-bar {
+            background: #1e293b;
+            padding: 0.5rem 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .browser-dot {
+            width: 0.5rem;
+            height: 0.5rem;
+            border-radius: 50%;
         }
     </style>
 </head>
@@ -48,8 +86,8 @@
                     <div>
                         <h1 class="text-lg font-bold tracking-tight">The Fair Play Initiative</h1>
                         <p class="text-xs text-slate-400">
-                            Verifiable Agentic Workflows
-                            <span class="ml-1 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.8.0</span>
+                            AI-Powered Policy Analysis
+                            <span class="ml-1 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.8.1</span>
                         </p>
                     </div>
                 </div>
@@ -65,21 +103,22 @@
     <!-- ================================================================= -->
     <!-- HERO -->
     <!-- ================================================================= -->
-    <section class="hero-bg text-white py-24 lg:py-32">
-        <div class="max-w-4xl mx-auto px-4 text-center fade-in">
-            <h2 class="text-4xl lg:text-5xl font-bold mb-6 tracking-tight">Beyond the Form</h2>
-            <p class="text-xl text-indigo-300 mb-4 font-medium">A Framework for Verifiable Agentic Workflows</p>
-            <p class="text-lg text-slate-300 max-w-2xl mx-auto mb-10 leading-relaxed">
-                Every enterprise runs on the same hidden workflow: someone reads a document and types the important parts
-                into a system. We're replacing that bottleneck with AI that reads, plans, and
-                asks for permission — so humans can focus on checking, not typing.
+    <section class="hero-bg text-white py-20 lg:py-28">
+        <div class="max-w-4xl mx-auto px-4 text-center">
+            <h2 class="text-4xl lg:text-5xl font-bold mb-6 tracking-tight">
+                AI reads your documents.<br class="hidden sm:block" />
+                You approve the plan.
+            </h2>
+            <p class="text-lg text-slate-300 max-w-xl mx-auto mb-10 leading-relaxed">
+                Upload a policy. The AI extracts the rules, shows you exactly what it plans to do,
+                and waits for your sign-off before touching the database.
             </p>
             <div class="flex justify-center gap-4 flex-wrap">
                 <a href="/dashboard"
                    class="bg-indigo-500 hover:bg-indigo-400 text-white px-8 py-3 rounded-lg font-semibold transition text-sm">
                     Try the Platform
                 </a>
-                <a href="#pipeline"
+                <a href="#how-it-works"
                    class="border border-slate-500 hover:border-indigo-400 text-slate-300 hover:text-white px-8 py-3 rounded-lg font-semibold transition text-sm">
                     See How It Works
                 </a>
@@ -88,140 +127,168 @@
     </section>
 
     <!-- ================================================================= -->
-    <!-- THE PROBLEM -->
+    <!-- SCREENSHOT -->
     <!-- ================================================================= -->
-    <section class="bg-white py-20">
+    <section class="bg-slate-50 pt-0 pb-16 -mt-10 relative z-10">
         <div class="max-w-5xl mx-auto px-4">
-            <div class="text-center mb-14 fade-in">
-                <p class="text-indigo-600 font-semibold text-sm uppercase tracking-wide mb-2">The Problem</p>
-                <h3 class="text-3xl font-bold mb-4">AI Doesn't Give You the Same Answer Twice</h3>
-                <p class="text-slate-500 max-w-2xl mx-auto text-lg">
-                    That's fine for drafting emails. It's not fine when the output triggers a disciplinary action,
-                    denies an insurance claim, or commits your company to a vendor contract.
-                </p>
-            </div>
-
-            <div class="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-                <!-- Old World -->
-                <div class="bg-slate-50 rounded-xl p-6 border border-slate-200">
-                    <div class="flex items-center gap-2 mb-4">
-                        <div class="bg-slate-200 p-1.5 rounded">
-                            <i data-lucide="monitor" class="w-4 h-4 text-slate-600"></i>
-                        </div>
-                        <h4 class="font-semibold text-slate-700">Traditional Software</h4>
-                    </div>
-                    <ul class="space-y-3 text-sm text-slate-600">
-                        <li class="flex items-start gap-2"><i data-lucide="check" class="w-4 h-4 text-slate-400 mt-0.5 shrink-0"></i>Same input = same output, every time</li>
-                        <li class="flex items-start gap-2"><i data-lucide="check" class="w-4 h-4 text-slate-400 mt-0.5 shrink-0"></i>80–90% of effort goes to building</li>
-                        <li class="flex items-start gap-2"><i data-lucide="check" class="w-4 h-4 text-slate-400 mt-0.5 shrink-0"></i>Ship it when the bugs are fixed</li>
-                        <li class="flex items-start gap-2"><i data-lucide="check" class="w-4 h-4 text-slate-400 mt-0.5 shrink-0"></i>Bugs are predictable and reproducible</li>
-                        <li class="flex items-start gap-2"><i data-lucide="check" class="w-4 h-4 text-slate-400 mt-0.5 shrink-0"></i>Humans operate: fill forms, click buttons</li>
-                    </ul>
+            <div class="browser-frame">
+                <div class="browser-bar">
+                    <div class="browser-dot bg-red-400"></div>
+                    <div class="browser-dot bg-amber-400"></div>
+                    <div class="browser-dot bg-emerald-400"></div>
+                    <span class="text-xs text-slate-400 ml-2 font-mono">localhost:7860/dashboard</span>
                 </div>
-                <!-- New World -->
-                <div class="bg-indigo-50 rounded-xl p-6 border border-indigo-200">
-                    <div class="flex items-center gap-2 mb-4">
-                        <div class="bg-indigo-100 p-1.5 rounded">
-                            <i data-lucide="brain" class="w-4 h-4 text-indigo-600"></i>
+                <!-- Stylized mockup of the dashboard -->
+                <div class="bg-slate-900 p-6 sm:p-8">
+                    <!-- Nav mockup -->
+                    <div class="flex items-center justify-between mb-6">
+                        <div class="flex items-center gap-2">
+                            <div class="bg-indigo-500 w-6 h-6 rounded"></div>
+                            <div class="bg-slate-700 h-3 w-32 rounded"></div>
+                            <span class="bg-indigo-600 text-indigo-200 text-[10px] font-mono px-1.5 py-0.5 rounded">v0.8.1</span>
                         </div>
-                        <h4 class="font-semibold text-indigo-700">AI-Powered Software</h4>
+                        <div class="flex gap-2">
+                            <div class="bg-slate-700 h-3 w-16 rounded"></div>
+                            <div class="bg-slate-700 h-3 w-16 rounded"></div>
+                        </div>
                     </div>
-                    <ul class="space-y-3 text-sm text-indigo-700">
-                        <li class="flex items-start gap-2"><i data-lucide="alert-triangle" class="w-4 h-4 text-indigo-400 mt-0.5 shrink-0"></i>Same input can produce different results</li>
-                        <li class="flex items-start gap-2"><i data-lucide="alert-triangle" class="w-4 h-4 text-indigo-400 mt-0.5 shrink-0"></i>80–90% of effort goes to evaluating</li>
-                        <li class="flex items-start gap-2"><i data-lucide="alert-triangle" class="w-4 h-4 text-indigo-400 mt-0.5 shrink-0"></i>Never "done" — continuous monitoring loop</li>
-                        <li class="flex items-start gap-2"><i data-lucide="alert-triangle" class="w-4 h-4 text-indigo-400 mt-0.5 shrink-0"></i>Failures are subtle and can drift over time</li>
-                        <li class="flex items-start gap-2"><i data-lucide="alert-triangle" class="w-4 h-4 text-indigo-400 mt-0.5 shrink-0"></i>Humans supervise: review, approve, reject</li>
-                    </ul>
+                    <!-- Content mockup: KPI cards + analysis result -->
+                    <div class="grid grid-cols-4 gap-3 mb-6 hidden sm:grid">
+                        <div class="bg-slate-800 rounded-lg p-3">
+                            <div class="bg-slate-700 h-2 w-16 rounded mb-2"></div>
+                            <div class="text-white font-bold text-lg">247</div>
+                            <div class="bg-slate-700 h-2 w-12 rounded mt-1"></div>
+                        </div>
+                        <div class="bg-slate-800 rounded-lg p-3">
+                            <div class="bg-slate-700 h-2 w-20 rounded mb-2"></div>
+                            <div class="text-white font-bold text-lg">18</div>
+                            <div class="bg-slate-700 h-2 w-14 rounded mt-1"></div>
+                        </div>
+                        <div class="bg-slate-800 rounded-lg p-3">
+                            <div class="bg-slate-700 h-2 w-14 rounded mb-2"></div>
+                            <div class="text-red-400 font-bold text-lg">3</div>
+                            <div class="bg-slate-700 h-2 w-10 rounded mt-1"></div>
+                        </div>
+                        <div class="bg-slate-800 rounded-lg p-3">
+                            <div class="bg-slate-700 h-2 w-18 rounded mb-2"></div>
+                            <div class="text-white font-bold text-lg">5</div>
+                            <div class="bg-slate-700 h-2 w-16 rounded mt-1"></div>
+                        </div>
+                    </div>
+                    <!-- Analysis result mockup -->
+                    <div class="grid sm:grid-cols-2 gap-4">
+                        <div class="bg-slate-800 rounded-lg p-4">
+                            <div class="flex items-center gap-2 mb-3">
+                                <i data-lucide="scan-search" class="w-4 h-4 text-indigo-400"></i>
+                                <span class="text-xs text-indigo-400 font-semibold">Extracted Keywords</span>
+                            </div>
+                            <div class="flex flex-wrap gap-1.5">
+                                <span class="bg-indigo-500/20 text-indigo-300 text-[10px] px-2 py-0.5 rounded-full">attendance_policy</span>
+                                <span class="bg-indigo-500/20 text-indigo-300 text-[10px] px-2 py-0.5 rounded-full">tardy &gt; 7min</span>
+                                <span class="bg-indigo-500/20 text-indigo-300 text-[10px] px-2 py-0.5 rounded-full">0.5 pts</span>
+                                <span class="bg-amber-500/20 text-amber-300 text-[10px] px-2 py-0.5 rounded-full">no_call_no_show</span>
+                                <span class="bg-amber-500/20 text-amber-300 text-[10px] px-2 py-0.5 rounded-full">2.0 pts</span>
+                                <span class="bg-emerald-500/20 text-emerald-300 text-[10px] px-2 py-0.5 rounded-full">excused_absence</span>
+                                <span class="bg-slate-600 text-slate-300 text-[10px] px-2 py-0.5 rounded-full">rolling_12mo</span>
+                            </div>
+                        </div>
+                        <div class="bg-slate-800 rounded-lg p-4">
+                            <div class="flex items-center gap-2 mb-3">
+                                <i data-lucide="list-tree" class="w-4 h-4 text-amber-400"></i>
+                                <span class="text-xs text-amber-400 font-semibold">Ingestion Plan</span>
+                                <span class="ml-auto bg-amber-500/20 text-amber-300 text-[10px] px-2 py-0.5 rounded-full">87% confidence</span>
+                            </div>
+                            <div class="space-y-2 text-[11px] text-slate-300 font-mono">
+                                <p><span class="text-slate-500">1.</span> INSERT policy <span class="text-indigo-400">"HR-811-A"</span></p>
+                                <p><span class="text-slate-500">2.</span> INSERT rule <span class="text-amber-400">tardy &gt; 7min → 0.5pts</span></p>
+                                <p><span class="text-slate-500">3.</span> INSERT rule <span class="text-amber-400">no_call → 2.0pts</span></p>
+                                <p><span class="text-slate-500">4.</span> LINK policy → region <span class="text-emerald-400">US-East</span></p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
-
-            <p class="text-center text-slate-500 mt-8 text-sm max-w-xl mx-auto">
-                Businesses need guarantees. We're building the architecture that delivers deterministic results
-                using technology that, by nature, doesn't offer them.
-            </p>
         </div>
     </section>
 
     <!-- ================================================================= -->
     <!-- 3-STEP PIPELINE -->
     <!-- ================================================================= -->
-    <section id="pipeline" class="bg-slate-50 py-20">
-        <div class="max-w-6xl mx-auto px-4">
-            <div class="text-center mb-14">
-                <p class="text-indigo-600 font-semibold text-sm uppercase tracking-wide mb-2">The Solution</p>
-                <h3 class="text-3xl font-bold mb-4">Show Your Work, Then Ask Permission</h3>
-                <p class="text-slate-500 max-w-2xl mx-auto text-lg">
-                    Instead of a black box, we break AI processing into three visible steps —
-                    each producing something a human can actually read and judge.
+    <section id="how-it-works" class="bg-white py-20">
+        <div class="max-w-5xl mx-auto px-4">
+            <div class="text-center mb-14 reveal">
+                <p class="text-indigo-600 font-semibold text-sm uppercase tracking-wide mb-2">How It Works</p>
+                <h3 class="text-3xl font-bold mb-4">Three Steps. One Human Checkpoint.</h3>
+                <p class="text-slate-500 max-w-lg mx-auto">
+                    Instead of a black box, the AI shows its work at every stage —
+                    and waits for approval before acting.
                 </p>
             </div>
 
             <!-- Pipeline cards -->
-            <div class="grid md:grid-cols-3 gap-8 mb-12">
+            <div class="grid md:grid-cols-3 gap-10 md:gap-6 relative">
                 <!-- Extract -->
-                <div class="bg-white rounded-xl p-6 card-shadow card-hover relative">
-                    <div class="pipeline-line hidden md:block absolute inset-0"></div>
-                    <div class="flex items-center gap-3 mb-4">
-                        <div class="bg-indigo-100 text-indigo-600 w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm">1</div>
-                        <span class="text-xs font-semibold text-indigo-600 uppercase tracking-wide">Extract</span>
+                <div class="relative reveal reveal-d1">
+                    <div class="bg-white rounded-xl p-6 card-shadow card-hover h-full border border-slate-100">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="bg-indigo-100 text-indigo-600 w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm">1</div>
+                            <span class="text-xs font-semibold text-indigo-600 uppercase tracking-wide">Extract</span>
+                        </div>
+                        <div class="bg-indigo-50 p-3 rounded-lg inline-block mb-4">
+                            <i data-lucide="scan-search" class="w-6 h-6 text-indigo-600"></i>
+                        </div>
+                        <h4 class="font-bold text-lg mb-2">"Here's what I found"</h4>
+                        <p class="text-slate-500 text-sm leading-relaxed">
+                            The AI reads your document and pulls out structured data — rules,
+                            thresholds, dates, organizations — mapped to your database fields.
+                        </p>
                     </div>
-                    <div class="bg-indigo-50 p-3 rounded-lg inline-block mb-4">
-                        <i data-lucide="scan-search" class="w-6 h-6 text-indigo-600"></i>
+                    <div class="pipeline-arrow">
+                        <i data-lucide="arrow-right" class="w-5 h-5 text-slate-300"></i>
                     </div>
-                    <h4 class="font-bold text-lg mb-2">"Here's what I found"</h4>
-                    <p class="text-slate-500 text-sm leading-relaxed">
-                        The AI reads your document — a dense PDF, a legal policy, a contract — and pulls out
-                        structured data: names, rules, thresholds, dates, mapped to your database fields.
-                    </p>
                 </div>
 
                 <!-- Plan -->
-                <div class="bg-white rounded-xl p-6 card-shadow card-hover border-2 border-amber-200 relative">
-                    <div class="pipeline-line hidden md:block absolute inset-0"></div>
-                    <div class="absolute -top-3 left-1/2 -translate-x-1/2">
-                        <span class="bg-amber-500 text-white text-xs font-bold px-3 py-1 rounded-full">Verification Gate</span>
+                <div class="relative reveal reveal-d2">
+                    <div class="bg-white rounded-xl p-6 card-shadow card-hover h-full border-2 border-amber-200">
+                        <div class="absolute -top-3 left-1/2 -translate-x-1/2">
+                            <span class="bg-amber-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-sm">Human Checkpoint</span>
+                        </div>
+                        <div class="flex items-center gap-3 mb-4 mt-2">
+                            <div class="bg-amber-100 text-amber-600 w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm">2</div>
+                            <span class="text-xs font-semibold text-amber-600 uppercase tracking-wide">Plan</span>
+                        </div>
+                        <div class="bg-amber-50 p-3 rounded-lg inline-block mb-4">
+                            <i data-lucide="list-tree" class="w-6 h-6 text-amber-600"></i>
+                        </div>
+                        <h4 class="font-bold text-lg mb-2">"Here's what I'll do"</h4>
+                        <p class="text-slate-500 text-sm leading-relaxed">
+                            Before anything touches the database, the AI shows its plan in plain language.
+                            You say <strong>"yes"</strong> or <strong>"no, fix this."</strong>
+                        </p>
                     </div>
-                    <div class="flex items-center gap-3 mb-4 mt-2">
-                        <div class="bg-amber-100 text-amber-600 w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm">2</div>
-                        <span class="text-xs font-semibold text-amber-600 uppercase tracking-wide">Plan</span>
+                    <div class="pipeline-arrow">
+                        <i data-lucide="arrow-right" class="w-5 h-5 text-slate-300"></i>
                     </div>
-                    <div class="bg-amber-50 p-3 rounded-lg inline-block mb-4">
-                        <i data-lucide="list-tree" class="w-6 h-6 text-amber-600"></i>
-                    </div>
-                    <h4 class="font-bold text-lg mb-2">"Here's what I'll do"</h4>
-                    <p class="text-slate-500 text-sm leading-relaxed">
-                        Before anything hits the database, the AI lays out its plan in plain language. A compliance
-                        officer can read it and say <strong>"yes, that's right"</strong> or <strong>"no, you missed something."</strong>
-                    </p>
                 </div>
 
                 <!-- Execute -->
-                <div class="bg-white rounded-xl p-6 card-shadow card-hover">
-                    <div class="flex items-center gap-3 mb-4">
-                        <div class="bg-emerald-100 text-emerald-600 w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm">3</div>
-                        <span class="text-xs font-semibold text-emerald-600 uppercase tracking-wide">Execute</span>
+                <div class="reveal reveal-d3">
+                    <div class="bg-white rounded-xl p-6 card-shadow card-hover h-full border border-slate-100">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="bg-emerald-100 text-emerald-600 w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm">3</div>
+                            <span class="text-xs font-semibold text-emerald-600 uppercase tracking-wide">Execute</span>
+                        </div>
+                        <div class="bg-emerald-50 p-3 rounded-lg inline-block mb-4">
+                            <i data-lucide="check-circle" class="w-6 h-6 text-emerald-600"></i>
+                        </div>
+                        <h4 class="font-bold text-lg mb-2">"Approved? Done."</h4>
+                        <p class="text-slate-500 text-sm leading-relaxed">
+                            Once you sign off, the system follows the approved plan exactly.
+                            No AI judgment. Deterministic. Auditable.
+                        </p>
                     </div>
-                    <div class="bg-emerald-50 p-3 rounded-lg inline-block mb-4">
-                        <i data-lucide="check-circle" class="w-6 h-6 text-emerald-600"></i>
-                    </div>
-                    <h4 class="font-bold text-lg mb-2">"Approved? Done."</h4>
-                    <p class="text-slate-500 text-sm leading-relaxed">
-                        Once a human signs off, the system carries out the plan. No AI judgment involved —
-                        just following approved instructions. Deterministic. Auditable. Done.
-                    </p>
                 </div>
-            </div>
-
-            <!-- Human gate callout -->
-            <div class="bg-amber-50 border border-amber-200 rounded-xl p-6 max-w-2xl mx-auto text-center">
-                <div class="flex justify-center mb-3">
-                    <i data-lucide="shield-check" class="w-8 h-8 text-amber-600"></i>
-                </div>
-                <p class="text-amber-800 font-medium text-sm">
-                    The human doesn't operate the system — they <strong>supervise</strong> it.
-                    The Verification Gate between Plan and Execute is what makes AI output enterprise-reliable.
-                </p>
             </div>
         </div>
     </section>
@@ -229,29 +296,27 @@
     <!-- ================================================================= -->
     <!-- TRUST LIFECYCLE -->
     <!-- ================================================================= -->
-    <section class="bg-white py-20">
+    <section class="bg-slate-50 py-20">
         <div class="max-w-5xl mx-auto px-4">
-            <div class="text-center mb-14">
-                <p class="text-indigo-600 font-semibold text-sm uppercase tracking-wide mb-2">The Journey</p>
+            <div class="text-center mb-14 reveal">
+                <p class="text-indigo-600 font-semibold text-sm uppercase tracking-wide mb-2">Over Time</p>
                 <h3 class="text-3xl font-bold mb-4">Trust Is Earned, Not Declared</h3>
-                <p class="text-slate-500 max-w-2xl mx-auto text-lg">
-                    You don't flip a switch and call the system reliable. You measure your way there.
+                <p class="text-slate-500 max-w-lg mx-auto">
+                    Every approval and rejection trains the system. Over time, routine work flows through automatically.
                 </p>
             </div>
 
             <div class="grid md:grid-cols-3 gap-6">
                 <!-- Phase 1 -->
-                <div class="relative">
-                    <div class="bg-indigo-50 rounded-xl p-6 card-hover h-full">
+                <div class="relative reveal reveal-d1">
+                    <div class="bg-white rounded-xl p-6 card-shadow card-hover h-full">
                         <div class="bg-indigo-100 w-10 h-10 rounded-full flex items-center justify-center mb-4">
                             <i data-lucide="eye" class="w-5 h-5 text-indigo-600"></i>
                         </div>
                         <p class="text-xs font-bold text-indigo-600 uppercase tracking-wide mb-1">Phase 1</p>
                         <h4 class="font-bold text-lg mb-3">Hands-On</h4>
-                        <p class="text-sm text-slate-600 mb-4">The human reviews every single output and rates each step.</p>
-                        <p class="text-xs text-indigo-600 font-medium">
-                            <i data-lucide="bar-chart-3" class="w-3 h-3 inline"></i>
-                            System builds a reliability baseline
+                        <p class="text-sm text-slate-500 leading-relaxed">
+                            Review every output. Rate each step. The system builds a reliability baseline.
                         </p>
                     </div>
                     <div class="hidden md:flex absolute top-1/2 -right-3 z-10 bg-white rounded-full p-1 shadow">
@@ -260,17 +325,15 @@
                 </div>
 
                 <!-- Phase 2 -->
-                <div class="relative">
-                    <div class="bg-amber-50 rounded-xl p-6 card-hover h-full">
+                <div class="relative reveal reveal-d2">
+                    <div class="bg-white rounded-xl p-6 card-shadow card-hover h-full">
                         <div class="bg-amber-100 w-10 h-10 rounded-full flex items-center justify-center mb-4">
                             <i data-lucide="trending-up" class="w-5 h-5 text-amber-600"></i>
                         </div>
                         <p class="text-xs font-bold text-amber-600 uppercase tracking-wide mb-1">Phase 2</p>
                         <h4 class="font-bold text-lg mb-3">Building Trust</h4>
-                        <p class="text-sm text-slate-600 mb-4">Reviews only flagged items. Trusts the high-confidence ones.</p>
-                        <p class="text-xs text-amber-600 font-medium">
-                            <i data-lucide="git-compare" class="w-3 h-3 inline"></i>
-                            System tracks agreement rates
+                        <p class="text-sm text-slate-500 leading-relaxed">
+                            Trust high-confidence results. Focus your attention on what the system flags as uncertain.
                         </p>
                     </div>
                     <div class="hidden md:flex absolute top-1/2 -right-3 z-10 bg-white rounded-full p-1 shadow">
@@ -279,185 +342,114 @@
                 </div>
 
                 <!-- Phase 3 -->
-                <div>
-                    <div class="bg-emerald-50 rounded-xl p-6 card-hover h-full">
+                <div class="reveal reveal-d3">
+                    <div class="bg-white rounded-xl p-6 card-shadow card-hover h-full">
                         <div class="bg-emerald-100 w-10 h-10 rounded-full flex items-center justify-center mb-4">
                             <i data-lucide="bot" class="w-5 h-5 text-emerald-600"></i>
                         </div>
                         <p class="text-xs font-bold text-emerald-600 uppercase tracking-wide mb-1">Phase 3</p>
                         <h4 class="font-bold text-lg mb-3">Autonomous</h4>
-                        <p class="text-sm text-slate-600 mb-4">Handles exceptions only. Routine work flows through automatically.</p>
-                        <p class="text-xs text-emerald-600 font-medium">
-                            <i data-lucide="lock" class="w-3 h-3 inline"></i>
-                            AI has proven itself — locked and running
+                        <p class="text-sm text-slate-500 leading-relaxed">
+                            Routine documents flow through automatically. You handle exceptions only.
                         </p>
                     </div>
                 </div>
             </div>
-
-            <p class="text-center text-slate-400 text-sm mt-8">
-                The feedback from Phase 1 is what makes Phase 3 possible. You can't skip to the end.
-            </p>
         </div>
     </section>
 
     <!-- ================================================================= -->
-    <!-- CROSS-INDUSTRY -->
+    <!-- WHAT'S IN THE PLATFORM -->
     <!-- ================================================================= -->
-    <section class="bg-slate-50 py-20">
-        <div class="max-w-6xl mx-auto px-4">
-            <div class="text-center mb-14">
-                <p class="text-indigo-600 font-semibold text-sm uppercase tracking-wide mb-2">Beyond HR</p>
-                <h3 class="text-3xl font-bold mb-4">This Pattern Works Across Industries</h3>
-                <p class="text-slate-500 max-w-2xl mx-auto text-lg">
-                    Anywhere someone reads a document and enters data into a system, this pipeline applies.
-                    Same bones, different skin.
+    <section class="bg-white py-20">
+        <div class="max-w-5xl mx-auto px-4">
+            <div class="text-center mb-14 reveal">
+                <p class="text-indigo-600 font-semibold text-sm uppercase tracking-wide mb-2">The Platform</p>
+                <h3 class="text-3xl font-bold mb-4">More Than a Policy Analyzer</h3>
+                <p class="text-slate-500 max-w-lg mx-auto">
+                    FPI is a complete attendance management platform — the AI pipeline sits on top of
+                    a production-grade compliance system.
                 </p>
             </div>
 
-            <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                <!-- Workforce -->
-                <div class="bg-white rounded-xl p-6 card-shadow card-hover border-l-4 border-indigo-500">
-                    <div class="flex items-center justify-between mb-3">
-                        <div class="bg-indigo-100 p-2 rounded-lg">
-                            <i data-lucide="building-2" class="w-5 h-5 text-indigo-600"></i>
-                        </div>
-                        <span class="bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-0.5 rounded-full">Active</span>
+            <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 reveal">
+                <div class="flex gap-3 p-4 rounded-lg hover:bg-slate-50 transition">
+                    <div class="bg-indigo-100 p-2 rounded-lg h-fit shrink-0">
+                        <i data-lucide="file-up" class="w-5 h-5 text-indigo-600"></i>
                     </div>
-                    <h4 class="font-bold mb-1">Workforce Compliance</h4>
-                    <p class="text-slate-500 text-sm mb-3">HR attendance policies</p>
-                    <p class="text-xs text-slate-400">Extract rules, thresholds, exemptions → Plan policy and rule inserts → Execute</p>
-                </div>
-
-                <!-- Insurance -->
-                <div class="bg-white rounded-xl p-6 card-shadow card-hover border-l-4 border-blue-400">
-                    <div class="mb-3">
-                        <div class="bg-blue-100 p-2 rounded-lg inline-block">
-                            <i data-lucide="shield-check" class="w-5 h-5 text-blue-600"></i>
-                        </div>
+                    <div>
+                        <h5 class="font-semibold text-sm mb-1">Policy Upload</h5>
+                        <p class="text-xs text-slate-500">PDF, DOCX, or paste text. AI extracts rules and generates an ingestion plan.</p>
                     </div>
-                    <h4 class="font-bold mb-1">Insurance</h4>
-                    <p class="text-slate-500 text-sm mb-3">Claims and medical records</p>
-                    <p class="text-xs text-slate-400">Extract diagnoses, coverage terms → Plan adjudication → Execute payout</p>
                 </div>
-
-                <!-- Procurement -->
-                <div class="bg-white rounded-xl p-6 card-shadow card-hover border-l-4 border-purple-400">
-                    <div class="mb-3">
-                        <div class="bg-purple-100 p-2 rounded-lg inline-block">
-                            <i data-lucide="file-text" class="w-5 h-5 text-purple-600"></i>
-                        </div>
+                <div class="flex gap-3 p-4 rounded-lg hover:bg-slate-50 transition">
+                    <div class="bg-amber-100 p-2 rounded-lg h-fit shrink-0">
+                        <i data-lucide="shield-check" class="w-5 h-5 text-amber-600"></i>
                     </div>
-                    <h4 class="font-bold mb-1">Procurement</h4>
-                    <p class="text-slate-500 text-sm mb-3">Vendor contracts and RFPs</p>
-                    <p class="text-xs text-slate-400">Extract terms, SLAs, pricing → Plan onboarding → Execute contracts</p>
-                </div>
-
-                <!-- Regulatory -->
-                <div class="bg-white rounded-xl p-6 card-shadow card-hover border-l-4 border-amber-400">
-                    <div class="mb-3">
-                        <div class="bg-amber-100 p-2 rounded-lg inline-block">
-                            <i data-lucide="landmark" class="w-5 h-5 text-amber-600"></i>
-                        </div>
+                    <div>
+                        <h5 class="font-semibold text-sm mb-1">Points-Based Discipline</h5>
+                        <p class="text-xs text-slate-500">Configurable rules, thresholds, and rolling windows. Automatic scoring on clock-in records.</p>
                     </div>
-                    <h4 class="font-bold mb-1">Regulatory</h4>
-                    <p class="text-slate-500 text-sm mb-3">Legal filings and compliance docs</p>
-                    <p class="text-xs text-slate-400">Extract requirements, deadlines → Plan reporting schedule → Execute filings</p>
                 </div>
-
-                <!-- Healthcare -->
-                <div class="bg-white rounded-xl p-6 card-shadow card-hover border-l-4 border-rose-400">
-                    <div class="mb-3">
-                        <div class="bg-rose-100 p-2 rounded-lg inline-block">
-                            <i data-lucide="heart-pulse" class="w-5 h-5 text-rose-600"></i>
-                        </div>
+                <div class="flex gap-3 p-4 rounded-lg hover:bg-slate-50 transition">
+                    <div class="bg-emerald-100 p-2 rounded-lg h-fit shrink-0">
+                        <i data-lucide="building-2" class="w-5 h-5 text-emerald-600"></i>
                     </div>
-                    <h4 class="font-bold mb-1">Healthcare</h4>
-                    <p class="text-slate-500 text-sm mb-3">Patient forms and referrals</p>
-                    <p class="text-xs text-slate-400">Extract demographics, conditions → Plan care assignments → Execute EHR records</p>
+                    <div>
+                        <h5 class="font-semibold text-sm mb-1">Multi-Tenant</h5>
+                        <p class="text-xs text-slate-500">Regions, organizations, and policies scoped per entity. Labor law context per region.</p>
+                    </div>
                 </div>
+                <div class="flex gap-3 p-4 rounded-lg hover:bg-slate-50 transition">
+                    <div class="bg-slate-100 p-2 rounded-lg h-fit shrink-0">
+                        <i data-lucide="scroll-text" class="w-5 h-5 text-slate-600"></i>
+                    </div>
+                    <div>
+                        <h5 class="font-semibold text-sm mb-1">Audit Trail</h5>
+                        <p class="text-xs text-slate-500">Every point change — violation or manual override — is recorded and traceable.</p>
+                    </div>
+                </div>
+                <div class="flex gap-3 p-4 rounded-lg hover:bg-slate-50 transition">
+                    <div class="bg-red-100 p-2 rounded-lg h-fit shrink-0">
+                        <i data-lucide="bell-ring" class="w-5 h-5 text-red-600"></i>
+                    </div>
+                    <div>
+                        <h5 class="font-semibold text-sm mb-1">Alerts & Red Flags</h5>
+                        <p class="text-xs text-slate-500">Threshold-based alerts when employees approach disciplinary action.</p>
+                    </div>
+                </div>
+                <div class="flex gap-3 p-4 rounded-lg hover:bg-slate-50 transition">
+                    <div class="bg-purple-100 p-2 rounded-lg h-fit shrink-0">
+                        <i data-lucide="flask-conical" class="w-5 h-5 text-purple-600"></i>
+                    </div>
+                    <div>
+                        <h5 class="font-semibold text-sm mb-1">Playground Mode</h5>
+                        <p class="text-xs text-slate-500">Safe sandbox with sample policies and seed data. Experiment without production risk.</p>
+                    </div>
+                </div>
+            </div>
 
-                <!-- More -->
-                <div class="bg-slate-100 rounded-xl p-6 card-hover border-l-4 border-slate-300 flex flex-col items-center justify-center text-center">
-                    <i data-lucide="plus-circle" class="w-8 h-8 text-slate-400 mb-3"></i>
-                    <h4 class="font-bold mb-1 text-slate-500">Your Domain</h4>
-                    <p class="text-slate-400 text-sm">Any document-to-database workflow fits this pattern</p>
-                </div>
+            <!-- Cross-industry footnote -->
+            <div class="mt-12 text-center reveal">
+                <p class="text-sm text-slate-400">
+                    The Extract &rarr; Plan &rarr; Verify &rarr; Execute pattern is domain-agnostic.
+                    While FPI focuses on workforce compliance, the same architecture applies to
+                    insurance claims, procurement contracts, regulatory filings, and medical intake.
+                </p>
             </div>
         </div>
     </section>
 
     <!-- ================================================================= -->
-    <!-- WHERE THIS IS HEADING -->
-    <!-- ================================================================= -->
-    <section class="bg-white py-20">
-        <div class="max-w-4xl mx-auto px-4">
-            <div class="text-center mb-14">
-                <p class="text-indigo-600 font-semibold text-sm uppercase tracking-wide mb-2">The Destination</p>
-                <h3 class="text-3xl font-bold mb-4">The Goal Isn't a Better Form. It's No Form at All.</h3>
-            </div>
-
-            <div class="space-y-6 max-w-2xl mx-auto">
-                <div class="flex gap-4 items-start">
-                    <div class="bg-slate-100 p-2 rounded-lg shrink-0 mt-1">
-                        <i data-lucide="upload" class="w-5 h-5 text-slate-500"></i>
-                    </div>
-                    <div>
-                        <p class="font-semibold text-sm text-slate-500 mb-1">Right Now</p>
-                        <p class="text-slate-700">You upload a document, review the extraction, check the plan, and approve. The interface is your <strong>workspace</strong>.</p>
-                    </div>
-                </div>
-
-                <div class="flex gap-4 items-start">
-                    <div class="bg-indigo-100 p-2 rounded-lg shrink-0 mt-1">
-                        <i data-lucide="layout-dashboard" class="w-5 h-5 text-indigo-500"></i>
-                    </div>
-                    <div>
-                        <p class="font-semibold text-sm text-indigo-600 mb-1">Next</p>
-                        <p class="text-slate-700">You open a dashboard showing what the system processed overnight — confidence scores, flagged anomalies. The interface is your <strong>audit panel</strong>.</p>
-                    </div>
-                </div>
-
-                <div class="flex gap-4 items-start">
-                    <div class="bg-emerald-100 p-2 rounded-lg shrink-0 mt-1">
-                        <i data-lucide="sparkles" class="w-5 h-5 text-emerald-500"></i>
-                    </div>
-                    <div>
-                        <p class="font-semibold text-sm text-emerald-600 mb-1">Eventually</p>
-                        <p class="text-slate-700">Only genuine edge cases reach a human. Everything routine is handled. You're promoted from <strong>data entry clerk</strong> to <strong>quality supervisor</strong>.</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- ================================================================= -->
-    <!-- CTA + FOOTER -->
+    <!-- CTA -->
     <!-- ================================================================= -->
     <section class="hero-bg text-white py-20">
-        <div class="max-w-4xl mx-auto px-4 text-center">
-            <h3 class="text-3xl font-bold mb-4">The Fair Play Initiative</h3>
-            <p class="text-slate-300 text-lg mb-8 max-w-2xl mx-auto">
-                We're proving this pattern works — starting with workforce attendance compliance,
-                where the documents are complex, the consequences are real,
-                and the margin for error is zero.
+        <div class="max-w-3xl mx-auto px-4 text-center">
+            <h3 class="text-3xl font-bold mb-4">See it in action</h3>
+            <p class="text-slate-300 mb-8 max-w-lg mx-auto">
+                Upload a policy document in the playground, watch the AI extract rules
+                and build an ingestion plan, then approve or reject.
             </p>
-
-            <div class="grid sm:grid-cols-3 gap-4 max-w-2xl mx-auto mb-10 text-left">
-                <div class="bg-white/5 rounded-lg p-4">
-                    <i data-lucide="file-up" class="w-4 h-4 text-indigo-400 mb-2"></i>
-                    <p class="text-sm text-slate-300">Upload HR policies as PDF, DOCX, or paste text</p>
-                </div>
-                <div class="bg-white/5 rounded-lg p-4">
-                    <i data-lucide="list-checks" class="w-4 h-4 text-amber-400 mb-2"></i>
-                    <p class="text-sm text-slate-300">AI extracts rules and generates a reviewable ingestion plan</p>
-                </div>
-                <div class="bg-white/5 rounded-lg p-4">
-                    <i data-lucide="bar-chart-3" class="w-4 h-4 text-emerald-400 mb-2"></i>
-                    <p class="text-sm text-slate-300">Track points, violations, trends, and alerts across organizations</p>
-                </div>
-            </div>
-
             <a href="/dashboard"
                class="inline-flex items-center gap-2 bg-indigo-500 hover:bg-indigo-400 text-white px-8 py-3 rounded-lg font-semibold transition text-sm">
                 <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
@@ -467,14 +459,14 @@
     </section>
 
     <!-- Footer -->
-    <footer class="gradient-bg text-slate-400 py-8">
-        <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row justify-between items-center gap-4 text-sm">
+    <footer class="gradient-bg text-slate-500 py-6">
+        <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row justify-between items-center gap-3 text-xs">
             <div class="flex items-center gap-2">
-                <i data-lucide="scale" class="w-4 h-4"></i>
+                <i data-lucide="scale" class="w-3.5 h-3.5"></i>
                 <span>The Fair Play Initiative</span>
-                <span class="bg-slate-700 text-slate-300 text-xs font-mono px-1.5 py-0.5 rounded">v0.8.0</span>
+                <span class="bg-slate-700 text-slate-400 font-mono px-1.5 py-0.5 rounded">v0.8.1</span>
             </div>
-            <p>Built with FastAPI, LangGraph, and Tailwind</p>
+            <a href="/dashboard" class="text-slate-500 hover:text-slate-300 transition">Go to Dashboard</a>
         </div>
     </footer>
 
@@ -493,6 +485,19 @@
                     target.scrollIntoView({ behavior: "smooth" });
                 }
             });
+        });
+
+        // Reveal-on-scroll
+        var observer = new IntersectionObserver(function(entries) {
+            entries.forEach(function(entry) {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add("visible");
+                }
+            });
+        }, { threshold: 0.15 });
+
+        document.querySelectorAll(".reveal").forEach(function(el) {
+            observer.observe(el);
         });
     </script>
 </body>
