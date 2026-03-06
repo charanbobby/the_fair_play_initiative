@@ -2793,7 +2793,7 @@
               if (bullets.length > 0) {
                 parts.push(`<div class="space-y-1${chips.length > 0 ? ' mt-2' : ''}">${bullets
                   .map((term) => `<div class="flex items-start gap-1.5 text-xs">
-                    <span class="mt-1 w-1.5 h-1.5 rounded-full ${colour.replace('text-', 'bg-').split(' ')[0]} shrink-0"></span>
+                    <span class="mt-1 w-1.5 h-1.5 rounded-full ${colour.split(' ').find(c => c.startsWith('text-')).replace('text-', 'bg-')} shrink-0"></span>
                     <span class="text-slate-600">${term}</span>
                   </div>`)
                   .join("")}</div>`);
