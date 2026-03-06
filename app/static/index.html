@@ -2925,6 +2925,35 @@
               <strong>Execution Error:</strong> ${esc(execResult.error)}
             </div>`;
           } else {
+            // Extract org/policy names from id_chain for summary
+            const idChain = (sqlResult && sqlResult.id_chain) || [];
+            const orgSlug = idChain.find(c => c.startsWith("organization:"))?.split(":")[1] || "";
+            const policySlug = idChain.find(c => c.startsWith("policy:"))?.split(":")[1] || "";
+            const ruleCount = (sqlResult && sqlResult.rule_count) || 0;
+            const orgName = (plan && plan.objective) || orgSlug;
+
+            // Ingested data summary
+            execHTML += `<div class="bg-indigo-50 border border-indigo-200 rounded-lg p-4 mb-4">
+              <div class="flex items-center gap-2 mb-2">
+                <i data-lucide="building" class="w-5 h-5 text-indigo-600"></i>
+                <span class="text-sm font-semibold text-indigo-800">Policy Ingested</span>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                <div>
+                  <span class="text-xs text-slate-500 uppercase block">Organization</span>
+                  <code class="text-xs font-semibold text-indigo-700">${esc(orgSlug)}</code>
+                </div>
+                <div>
+                  <span class="text-xs text-slate-500 uppercase block">Policy</span>
+                  <code class="text-xs font-semibold text-indigo-700">${esc(policySlug)}</code>
+                </div>
+                <div>
+                  <span class="text-xs text-slate-500 uppercase block">Rules Created</span>
+                  <span class="text-lg font-bold text-indigo-700">${ruleCount}</span>
+                </div>
+              </div>
+            </div>`;
+
             execHTML += `<div class="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
               <div class="flex items-center gap-2 mb-3">
                 <i data-lucide="check-circle" class="w-5 h-5 text-emerald-600"></i>
@@ -2948,6 +2977,15 @@
               <td class="py-1.5 text-right font-mono">${execResult.total_rows || 0}</td>
             </tr>`;
             execHTML += `</tbody></table></div>`;
+
+            // Auto-refresh dashboard data so the new org/policy/rules appear
+            loadDataFromAPI().then(() => {
+              populateOrganizationFilter();
+              renderDashboard();
+              renderActiveRules();
+              lucide.createIcons();
+              showToast("Dashboard refreshed with ingested data!");
+            });
           }
 
           document.getElementById("exec-section").innerHTML = execHTML;
