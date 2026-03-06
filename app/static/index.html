@@ -113,7 +113,7 @@
               <h1 class="text-xl font-bold">The Fair Play Initiative</h1>
               <p class="text-xs text-slate-400">
                 Balanced Attendance Management
-                <span class="ml-2 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.6.0</span>
+                <span class="ml-2 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.6.1</span>
               </p>
             </div>
           </div>
@@ -379,6 +379,7 @@
               </label>
               <select id="llm-model-extract" class="llm-model-select border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white w-full" onchange="showModelCard('extract')"></select>
               <div id="model-card-extract" class="hidden mt-1 px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs text-slate-500"></div>
+              <div id="model-stats-extract" class="hidden mt-1 px-2 py-1 text-xs text-slate-600"></div>
             </div>
             <div>
               <label for="llm-model-plan" class="block text-xs font-medium text-slate-500 mb-1">
@@ -387,6 +388,7 @@
               </label>
               <select id="llm-model-plan" class="llm-model-select border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white w-full" onchange="showModelCard('plan')"></select>
               <div id="model-card-plan" class="hidden mt-1 px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs text-slate-500"></div>
+              <div id="model-stats-plan" class="hidden mt-1 px-2 py-1 text-xs text-slate-600"></div>
             </div>
             <div class="relative" title="Coming soon — SQL generation node not yet wired">
               <label for="llm-model-sql" class="block text-xs font-medium text-slate-400 mb-1">
@@ -1375,6 +1377,43 @@
         } else {
           card.classList.add("hidden");
         }
+        fetchModelStats(step);
+      }
+
+      function fetchModelStats(step) {
+        const sel = document.getElementById(`llm-model-${step}`);
+        const statsEl = document.getElementById(`model-stats-${step}`);
+        if (!sel || !statsEl) return;
+        const model = sel.value;
+        if (!model) { statsEl.classList.add("hidden"); return; }
+
+        fetch(`${API_BASE}/feedback/stats?step=${step}&llm_model=${encodeURIComponent(model)}`)
+          .then(r => r.json())
+          .then(data => {
+            const s = data && data.length > 0 ? data[0] : null;
+            if (!s || (s.rating_count === 0 && s.total_runs === 0)) {
+              statsEl.innerHTML = `<span class="text-slate-400">No usage data yet</span>`;
+            } else {
+              let parts = [];
+              if (s.rating_count > 0) {
+                parts.push(
+                  `<span class="text-emerald-600">${s.good_pct}% Good</span> · ` +
+                  `<span class="text-amber-600">${s.partial_pct}% Partial</span> · ` +
+                  `<span class="text-red-600">${s.bad_pct}% Bad</span> ` +
+                  `<span class="text-slate-400">(${s.rating_count} ratings)</span>`
+                );
+              }
+              if (s.total_runs > 0) {
+                parts.push(
+                  `Avg tokens: <span class="font-mono font-semibold">${Math.round(s.avg_tokens).toLocaleString()}</span> ` +
+                  `<span class="text-slate-400">(${s.total_runs} runs)</span>`
+                );
+              }
+              statsEl.innerHTML = parts.join(`<span class="mx-1 text-slate-300">|</span>`);
+            }
+            statsEl.classList.remove("hidden");
+          })
+          .catch(() => { statsEl.classList.add("hidden"); });
       }
 
       // ── Per-step feedback ─────────────────────────────────────────────
@@ -1397,10 +1436,25 @@
         const clicked = [...container.querySelectorAll(".feedback-btn")].find(b => b.textContent.trim().toLowerCase() === rating);
         if (clicked) clicked.classList.add(...colorMap[rating]);
 
-        // Log feedback (console for now; can POST to endpoint later)
+        // POST feedback to API
         const model = document.getElementById(`llm-model-${step}`)?.value || "default";
-        console.log(`[feedback] step=${step} rating=${rating} model=${model}`, _lastAnalysisData?.filename);
-        showToast(`Feedback recorded: ${step} = ${rating}`);
+        fetch(`${API_BASE}/feedback`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            step,
+            rating,
+            llm_model: model,
+            filename: _lastAnalysisData?.filename || null,
+          }),
+        }).then(() => {
+          showToast(`Feedback saved: ${step} = ${rating}`);
+          // Refresh stats for this step's model card
+          fetchModelStats(step);
+        }).catch(err => {
+          console.error("[feedback] save failed:", err);
+          showToast(`Feedback save failed`, "error");
+        });
       }
 
       // Initialize

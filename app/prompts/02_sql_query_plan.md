@@ -27,24 +27,30 @@ INSERT strategy per table:
   • policy              : INSERT OR REPLACE — a revised policy document supersedes prior versions; effective_date and active flag must stay current
   • rule                : INSERT OR REPLACE — policy revisions may update thresholds and point values
 
-ID chaining — always set uses_cte = True and describe the full chain in cte_description:
+ID chaining — always set uses_cte = True and populate the id_chaining_summary list:
   After each INSERT, the generated ID flows as FK into subsequent INSERTs:
   organization.id → region.id → organization_region.(organization_id, region_id) → policy.(organization_id, region_id) → policy.id → rule.policy_id
   Without this chain, FK constraints cannot be satisfied.
 
-cte_description — this field carries the COMPLETE procedural plan. It MUST contain all of the following:
-  1. For each table in INSERT order, a numbered step containing:
-     - Table name and INSERT strategy (OR IGNORE / OR REPLACE)
-     - Every column to be populated, mapped to the exact extracted keyword that provides its value
-     - The natural key used for the existence check (matches the where_filters entry)
-  2. A complete enumeration of ALL rule rows in THREE groups — include every row from the policy; do not summarise or omit:
-     a. Violation/occurrence rules — one row per violation type that GENERATES points (points > 0)
-     b. Approved-leave exemption rules — one row per leave type that is explicitly excused (points = 0.0)
-     c. Perfect-attendance reduction rules — one row per milestone (threshold = consecutive clean days: 30, 60, 90, 365; points = negative value)
-     For each rule row provide: id (kebab slug), name, condition (plain-English HRIS trigger), threshold, points, description, active.
-  3. ID chaining summary (one line per FK relationship).
-  4. Operational reminders — placeholders that need resolution from HRIS/facility master data (region code, timezone, etc.).
+table_steps — populate one TableStep object per table in INSERT order. Each step must contain:
+  - step_number: sequential (1=organization, 2=region, 3=organization_region, 4=policy, 5=rule)
+  - table: exact table name
+  - strategy: "INSERT OR IGNORE" or "INSERT OR REPLACE"
+  - columns: list of ColumnMapping objects — each mapping a column name to the exact extracted keyword or derived value. Prefix uncertain values with "[PLACEHOLDER]".
+  - natural_key: the column(s) used for the existence check (matches the where_filters entry)
+
+rule_rows — populate one RuleRow object per rule. Include every rule from the policy in THREE groups; do not summarise or omit:
+  a. Violation/occurrence rules — one per violation type that GENERATES points (category = "violation", points > 0)
+  b. Approved-leave exemption rules — one per leave type explicitly excused (category = "exemption", points = 0.0)
+  c. Perfect-attendance reduction rules — one per milestone (category = "reduction", threshold = consecutive clean days: 30, 60, 90, 365; points = negative value)
+  For each rule provide: id (kebab slug), name, category, condition (plain-English HRIS trigger), threshold, points, description, active.
   Completeness is critical — a missing rule row means the policy is partially loaded.
+
+id_chaining_summary — one string per FK relationship:
+  e.g. "organization.id → organization_region.organization_id"
+
+operational_reminders — one string per placeholder or operational note:
+  e.g. "region.code: placeholder 'AMC-PLANT-US' — resolve from facility master data"
 
 RULE EXCLUSIONS — do NOT create rule rows for any of the following:
   • Definitions or glossary terms (e.g. 'Occurrence', 'Rolling 12-Month Period') — these are policy metadata, not actionable rules
@@ -92,7 +98,7 @@ Planning rules:
 1. List tables_required in INSERT order (organization first, rule last).
 2. List joins as FK dependency chains: child table (left) → parent table (right); condition = FK column = PK column; join_type = 'INNER'.
 3. List where_filters: one existence check per table using the natural keys above. Set source_keyword to the extracted keyword that provides the natural key value.
-4. Put ALL column-to-keyword mappings and ALL rule row enumerations in cte_description. Do NOT put column mappings only in the purpose field of tables_required.
+4. Put ALL column-to-keyword mappings in table_steps[].columns. Put ALL rule row enumerations in rule_rows. Put FK chain descriptions in id_chaining_summary. Put placeholder notes in operational_reminders.
 5. Leave grouping_columns, aggregations, having_filters, and output_columns empty.
 
 # FPI Schema

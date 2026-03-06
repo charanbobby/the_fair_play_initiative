@@ -135,10 +135,18 @@ def node_plan(state: FPIState) -> dict:
     result = raw_result["parsed"]
     tokens = _extract_token_usage(raw_result.get("raw"))
     # Post-process: enforce realistic confidence scores
-    has_placeholders = bool(
-        result.cte_description and "placeholder" in result.cte_description.lower()
+    has_placeholders = any(
+        "[placeholder]" in cm.value_source.lower()
+        for step in result.table_steps
+        for cm in step.columns
+    ) or any(
+        "placeholder" in r.lower()
+        for r in result.operational_reminders
     )
     result.confidence_score = _adjust_confidence(result.confidence_score, has_placeholders)
+    # Synthesize legacy cte_description from structured fields
+    if result.table_steps or result.rule_rows:
+        result.cte_description = _synthesize_cte_description(result)
     return {"sql_plan": result, "plan_tokens": tokens}
 
 
@@ -211,6 +219,45 @@ def _format_keywords(kw: KeywordExtraction) -> str:
 # Helper: plain-text serialiser for SQLQueryPlan (matches notebook output)
 # ---------------------------------------------------------------------------
 
+def _synthesize_cte_description(plan: SQLQueryPlan) -> str:
+    """Build a legacy cte_description string from structured fields."""
+    parts: list[str] = []
+    for step in plan.table_steps:
+        col_str = "; ".join(f"{c.column}={c.value_source}" for c in step.columns)
+        parts.append(
+            f"{step.step_number}) {step.table} — {step.strategy}; "
+            f"columns: {col_str}; natural key: {step.natural_key}"
+        )
+    if plan.rule_rows:
+        violations = [r for r in plan.rule_rows if r.category == "violation"]
+        exemptions = [r for r in plan.rule_rows if r.category == "exemption"]
+        reductions = [r for r in plan.rule_rows if r.category == "reduction"]
+        for label, group in [
+            ("A) Violation rules", violations),
+            ("B) Exemption rules", exemptions),
+            ("C) Reduction rules", reductions),
+        ]:
+            if group:
+                parts.append(label)
+                for i, r in enumerate(group, 1):
+                    parts.append(
+                        f"  {i}. id: {r.id}\n"
+                        f"     name: {r.name}\n"
+                        f"     condition: {r.condition}\n"
+                        f"     threshold: {r.threshold}\n"
+                        f"     points: {r.points}\n"
+                        f"     description: {r.description}\n"
+                        f"     active: {r.active}"
+                    )
+    if plan.id_chaining_summary:
+        parts.append("ID chaining summary")
+        parts.extend(f"  {c}" for c in plan.id_chaining_summary)
+    if plan.operational_reminders:
+        parts.append("Operational reminders")
+        parts.extend(f"  — {r}" for r in plan.operational_reminders)
+    return "\n".join(parts)
+
+
 def _format_plan(plan: SQLQueryPlan) -> str:
     lines: list[str] = []
     lines.append(f"OBJECTIVE\n  {plan.objective}\n")
@@ -262,9 +309,55 @@ def _format_plan(plan: SQLQueryPlan) -> str:
         lines.append("  " + ", ".join(plan.output_columns))
         lines.append("")
 
-    if plan.uses_cte:
+    # ── Structured ingestion plan sections ────────────────────────────
+    if plan.table_steps:
+        lines.append("INGESTION STEPS")
+        for step in plan.table_steps:
+            lines.append(f"  {step.step_number}) {step.table} — {step.strategy}")
+            for col in step.columns:
+                lines.append(f"       {col.column}: {col.value_source}")
+            lines.append(f"       natural key: {step.natural_key}")
+        lines.append("")
+
+    if plan.rule_rows:
+        violations = [r for r in plan.rule_rows if r.category == "violation"]
+        exemptions = [r for r in plan.rule_rows if r.category == "exemption"]
+        reductions = [r for r in plan.rule_rows if r.category == "reduction"]
+        lines.append("RULE ROWS")
+        for label, group in [
+            ("A) Violation/Occurrence Rules", violations),
+            ("B) Approved-Leave Exemption Rules", exemptions),
+            ("C) Perfect-Attendance Reduction Rules", reductions),
+        ]:
+            if group:
+                lines.append(f"  {label}")
+                for i, r in enumerate(group, 1):
+                    lines.append(f"    {i}. id: {r.id}")
+                    lines.append(f"       name: {r.name}")
+                    lines.append(f"       condition: {r.condition}")
+                    lines.append(f"       threshold: {r.threshold}")
+                    lines.append(f"       points: {r.points}")
+                    if r.description:
+                        lines.append(f"       description: {r.description}")
+                    lines.append(f"       active: {r.active}")
+        lines.append("")
+
+    if plan.id_chaining_summary:
+        lines.append("ID CHAINING SUMMARY")
+        for chain in plan.id_chaining_summary:
+            lines.append(f"  {chain}")
+        lines.append("")
+
+    if plan.operational_reminders:
+        lines.append("OPERATIONAL REMINDERS")
+        for reminder in plan.operational_reminders:
+            lines.append(f"  — {reminder}")
+        lines.append("")
+
+    # Legacy fallback: if only cte_description is populated (old cached response)
+    if plan.uses_cte and not plan.table_steps and plan.cte_description:
         lines.append("CTE")
-        lines.append(f"  {plan.cte_description or '(no description)'}")
+        lines.append(f"  {plan.cte_description}")
 
     return "\n".join(lines)
 

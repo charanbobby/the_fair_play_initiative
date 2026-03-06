@@ -81,6 +81,7 @@ async def analyze_policy(
     file: UploadFile = File(...),
     model_extract: Optional[str] = None,
     model_plan: Optional[str] = None,
+    db: Session = Depends(get_db),
 ):
     """
     Upload a policy document (PDF, DOCX, or TXT) and receive:
@@ -93,6 +94,7 @@ async def analyze_policy(
     """
     allowed = {".pdf", ".docx", ".doc", ".txt"}
     from pathlib import Path
+    from app.config import settings
     ext = Path(file.filename or "").suffix.lower()
     if ext not in allowed:
         raise HTTPException(
@@ -106,11 +108,35 @@ async def analyze_policy(
 
     try:
         from app.services.policy_analyzer import analyze_policy_document
-        return await analyze_policy_document(
+        result = await analyze_policy_document(
             file.filename, content,
             model_extract=model_extract,
             model_plan=model_plan,
         )
+
+        # Auto-save analysis logs for token tracking
+        default_model = settings.LLM_MODEL or "gpt-4o-mini"
+        usage = result.token_usage
+        if usage:
+            db.add(models.AnalysisLog(
+                filename=file.filename or "",
+                step="extract",
+                llm_model=model_extract or default_model,
+                prompt_tokens=usage.extract_prompt,
+                completion_tokens=usage.extract_completion,
+                total_tokens=usage.extract_total,
+            ))
+            db.add(models.AnalysisLog(
+                filename=file.filename or "",
+                step="plan",
+                llm_model=model_plan or default_model,
+                prompt_tokens=usage.plan_prompt,
+                completion_tokens=usage.plan_completion,
+                total_tokens=usage.plan_total,
+            ))
+            db.commit()
+
+        return result
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
     except Exception as exc:

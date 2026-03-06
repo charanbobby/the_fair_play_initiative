@@ -61,6 +61,7 @@ from app.routers import (
     attendance,
     alerts,
     dashboard,
+    feedback,
 )
 
 logger = app_logging.logger
@@ -101,7 +102,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Fair Play Initiative — API",
     description="FastAPI backend for the Fair Play Initiative attendance management platform.",
-    version="0.6.0",
+    version="0.6.1",
     lifespan=lifespan,
     redirect_slashes=False,
 )
@@ -137,6 +138,7 @@ app.include_router(employees.router, prefix=API_PREFIX)
 app.include_router(attendance.router, prefix=API_PREFIX)
 app.include_router(alerts.router, prefix=API_PREFIX)
 app.include_router(dashboard.router, prefix=API_PREFIX)
+app.include_router(feedback.router, prefix=API_PREFIX)
 
 
 # ---------------------------------------------------------------------------

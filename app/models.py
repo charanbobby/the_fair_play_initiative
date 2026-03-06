@@ -5,7 +5,8 @@ SQLAlchemy ORM models for the Fair Play Initiative.
 
 Entities:
   Region, Organization, OrganizationRegion (M2M),
-  Policy, Rule, Employee, PointHistory, AttendanceLog, Alert
+  Policy, Rule, Employee, PointHistory, AttendanceLog, Alert,
+  AnalysisLog, AnalysisFeedback
 """
 
 from __future__ import annotations
@@ -270,4 +271,38 @@ class Alert(Base):
     # relationships
     organization: Mapped[Optional["Organization"]] = relationship(
         "Organization", back_populates="alerts"
+    )
+
+
+# ---------------------------------------------------------------------------
+# AnalysisLog — auto-saved on each policy analysis run
+# ---------------------------------------------------------------------------
+class AnalysisLog(Base):
+    __tablename__ = "analysis_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    filename: Mapped[str] = mapped_column(String, nullable=False)
+    step: Mapped[str] = mapped_column(String, nullable=False)       # 'extract' | 'plan'
+    llm_model: Mapped[str] = mapped_column(String, nullable=False)
+    prompt_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    completion_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    total_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), nullable=False
+    )
+
+
+# ---------------------------------------------------------------------------
+# AnalysisFeedback — user-submitted Good/Partial/Bad ratings
+# ---------------------------------------------------------------------------
+class AnalysisFeedback(Base):
+    __tablename__ = "analysis_feedback"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    step: Mapped[str] = mapped_column(String, nullable=False)       # 'extract' | 'plan'
+    rating: Mapped[str] = mapped_column(String, nullable=False)     # 'good' | 'partial' | 'bad'
+    llm_model: Mapped[str] = mapped_column(String, nullable=False)
+    filename: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), nullable=False
     )

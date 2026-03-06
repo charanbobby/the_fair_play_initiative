@@ -360,6 +360,56 @@ class AggregationStep(BaseModel):
     purpose: str = Field(description="What business question this aggregation answers.")
 
 
+class ColumnMapping(BaseModel):
+    """Maps a database column to its value source from extracted keywords."""
+    column: str = Field(description="Database column name from the FPI schema.")
+    value_source: str = Field(
+        description="Extracted keyword or derived value. Prefix placeholders with '[PLACEHOLDER]'.",
+    )
+
+
+class TableStep(BaseModel):
+    """One INSERT step in the ingestion plan, in FK-dependency order."""
+    step_number: int = Field(
+        description="1-based, FK order: 1=organization, 2=region, "
+                    "3=organization_region, 4=policy, 5=rule.",
+    )
+    table: str = Field(
+        description="Exact table name (organization, region, organization_region, policy, rule).",
+    )
+    strategy: str = Field(
+        description="'INSERT OR IGNORE' or 'INSERT OR REPLACE'.",
+    )
+    columns: list[ColumnMapping] = Field(
+        default_factory=list,
+        description="Every column to be populated, mapped to the extracted keyword or derived value.",
+    )
+    natural_key: str = Field(
+        description="Natural key column(s) for the existence check "
+                    "(e.g. 'name' for organization, 'code' for region).",
+    )
+
+
+class RuleRow(BaseModel):
+    """One rule row to be INSERTed into the rule table."""
+    id: str = Field(description="Kebab-case slug (e.g. 'ncns-first-day', 'fmla-leave', 'perfect-30').")
+    name: str = Field(description="Human-readable rule name.")
+    category: str = Field(
+        description="One of: 'violation', 'exemption', 'reduction'. "
+                    "Violations have positive points, exemptions 0.0, reductions negative.",
+    )
+    condition: str = Field(description="Plain-English HRIS trigger condition. Do NOT write SQL.")
+    threshold: float = Field(
+        description="Occurrence count (1 for single-event, 3 for third-minor-tardy) "
+                    "or consecutive clean days for reductions (30, 60, 90, 365).",
+    )
+    points: float = Field(
+        description="Positive for violations, 0.0 for exemptions, negative for reductions.",
+    )
+    description: str = Field(default="", description="Brief description of the rule.")
+    active: bool = Field(default=True, description="Whether this rule is active.")
+
+
 class SQLQueryPlan(BaseModel):
     objective: str = Field(
         default="",
@@ -399,9 +449,35 @@ class SQLQueryPlan(BaseModel):
         default=False,
         description="True if the plan requires CTE-style ID chaining across INSERT steps.",
     )
+    # ── Structured ingestion plan fields ──────────────────────────────────
+    table_steps: list[TableStep] = Field(
+        default_factory=list,
+        description="Per-table INSERT steps in FK-dependency order "
+                    "(organization → region → organization_region → policy → rule). "
+                    "Exactly 5 steps for a standard policy ingestion.",
+    )
+    rule_rows: list[RuleRow] = Field(
+        default_factory=list,
+        description="Complete enumeration of ALL rule rows: "
+                    "violation rules (points > 0), approved-leave exemptions (points = 0.0), "
+                    "and perfect-attendance reductions (points < 0). "
+                    "A typical policy produces 20–25 rows. Do NOT omit any.",
+    )
+    id_chaining_summary: list[str] = Field(
+        default_factory=list,
+        description="One line per FK relationship, e.g. "
+                    "'organization.id → organization_region.organization_id'.",
+    )
+    operational_reminders: list[str] = Field(
+        default_factory=list,
+        description="Placeholders needing resolution from HRIS/facility master data "
+                    "(e.g. region code, timezone, effective date).",
+    )
+    # ── Deprecated — auto-populated from structured fields ────────────────
     cte_description: Optional[str] = Field(
         default=None,
-        description="Complete procedural plan: per-table column mappings, all rule row enumerations, ID chaining summary, and operational reminders.",
+        description="DEPRECATED — auto-populated from table_steps, rule_rows, "
+                    "id_chaining_summary, and operational_reminders. Do NOT populate directly.",
     )
     confidence_score: float = Field(
         default=0.0,
@@ -419,6 +495,34 @@ class TokenUsage(BaseModel):
     plan_prompt: int = 0
     plan_completion: int = 0
     plan_total: int = 0
+
+
+# ---------------------------------------------------------------------------
+# Feedback & Analysis Logging
+# ---------------------------------------------------------------------------
+
+class FeedbackCreate(BaseModel):
+    step: str
+    rating: str
+    llm_model: str
+    filename: str | None = None
+
+
+class FeedbackResponse(FeedbackCreate):
+    id: int
+    created_at: datetime
+    model_config = {"from_attributes": True}
+
+
+class ModelRatingStats(BaseModel):
+    llm_model: str
+    step: str
+    total_runs: int = 0
+    avg_tokens: float = 0.0
+    rating_count: int = 0
+    good_pct: float = 0.0
+    partial_pct: float = 0.0
+    bad_pct: float = 0.0
 
 
 class PolicyAnalysisResponse(BaseModel):
