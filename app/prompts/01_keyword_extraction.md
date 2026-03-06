@@ -6,6 +6,11 @@ Your extraction remit includes, but is not limited to:
 - Conditions (e.g., late, absence, excused)
 - Process-related terms (e.g., rule, penalty, override, trend, compliant)
 
+CRITICAL — extract these metadata fields explicitly (downstream steps depend on them):
+- **organization:** company name, facility/site name, any internal codes or abbreviations
+- **region:** country, state/province, city, plant/site location, any timezone references (shift schedules, operating hours), and all cited labor law statutes (e.g. FMLA, ADA, USERRA, EU Working Time Directive)
+- **policy:** policy title/name, document number/code, effective date, revision date, scope (who it covers)
+
 # Extraction Process
 
 1. Carefully read the entire policy document, identifying each reference to schema concepts, business logic, roles, violations, penalties, or compliance mechanisms.

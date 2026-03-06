@@ -8,6 +8,13 @@
       "timezone",
       "labor_laws"
     ],
+    "column_semantics": {
+      "id": "lower-kebab-case slug (e.g. 'us-midwest-detroit')",
+      "name": "human-readable label (e.g. 'US Midwest - Detroit Plant')",
+      "code": "short alphanumeric identifier, DISTINCT from name (e.g. 'US-MW-DET')",
+      "timezone": "IANA timezone string (e.g. 'America/Detroit') — never a placeholder sentence",
+      "labor_laws": "comma-separated statute names from the policy (e.g. 'FMLA, ADA, USERRA')"
+    },
     "primary_key": [
       "id"
     ],
@@ -21,6 +28,12 @@
       "code",
       "active"
     ],
+    "column_semantics": {
+      "id": "lower-kebab-case slug (e.g. 'acme-manufacturing')",
+      "name": "full legal/common company name (e.g. 'Acme Manufacturing Co.')",
+      "code": "short internal code, DISTINCT from name (e.g. 'ACME')",
+      "active": "1 = active, 0 = inactive"
+    },
     "primary_key": [
       "id"
     ],

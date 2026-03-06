@@ -166,11 +166,11 @@ def node_plan(state: FPIState) -> dict:
     tokens = _extract_token_usage(raw_result.get("raw"))
     # Post-process: enforce realistic confidence scores
     has_placeholders = any(
-        "[placeholder]" in cm.value_source.lower()
+        "[uncertain]" in cm.value_source.lower()
         for step in result.table_steps
         for cm in step.columns
     ) or any(
-        "placeholder" in r.lower()
+        "uncertain" in r.lower()
         for r in result.operational_reminders
     )
     result.confidence_score = _adjust_confidence(result.confidence_score, has_placeholders)

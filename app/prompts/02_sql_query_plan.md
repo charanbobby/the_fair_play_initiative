@@ -36,7 +36,7 @@ table_steps — populate one TableStep object per table in INSERT order. Each st
   - step_number: sequential (1=organization, 2=region, 3=organization_region, 4=policy, 5=rule)
   - table: exact table name
   - strategy: "INSERT OR IGNORE" or "INSERT OR REPLACE"
-  - columns: list of ColumnMapping objects — each mapping a column name to the exact extracted keyword or derived value. Prefix uncertain values with "[PLACEHOLDER]".
+  - columns: list of ColumnMapping objects — each mapping a column name to the exact extracted keyword or derived value. For uncertain values, provide your best guess and append " [uncertain]" (e.g. "America/Detroit [uncertain]"). NEVER use raw "[PLACEHOLDER]" strings — always provide a usable best-guess value.
   - natural_key: the column(s) used for the existence check (matches the where_filters entry)
 
 rule_rows — populate one RuleRow object per rule. Include every rule from the policy in THREE groups; do not summarise or omit:
@@ -49,8 +49,8 @@ rule_rows — populate one RuleRow object per rule. Include every rule from the 
 id_chaining_summary — one string per FK relationship:
   e.g. "organization.id → organization_region.organization_id"
 
-operational_reminders — one string per placeholder or operational note:
-  e.g. "region.code: placeholder 'AMC-PLANT-US' — resolve from facility master data"
+operational_reminders — one string per uncertain value or operational note:
+  e.g. "region.code: 'ACME-US-MW' [uncertain] — confirm against facility master data"
 
 RULE EXCLUSIONS — do NOT create rule rows for any of the following:
   • Definitions or glossary terms (e.g. 'Occurrence', 'Rolling 12-Month Period') — these are policy metadata, not actionable rules
@@ -80,8 +80,8 @@ Rule rows — plan one row per:
 
 Value derivation:
   • id (organization, region, policy): generate a lower-kebab-case slug (e.g. 'acme-manufacturing', 'hr-att-2024-001')
-  • region.code: if not stated explicitly in the policy, derive a placeholder (e.g. 'AMC-PLANT-US') and note it must be resolved from facility master data
-  • region.timezone: infer from shift schedule context or mark as a placeholder (e.g. 'America/Detroit') to be confirmed from HRIS
+  • region.code: if not stated explicitly, derive a short alphanumeric code from the org name + location (e.g. 'ACME-US-MW') and mark as uncertain. Code must differ from region.name.
+  • region.timezone: infer from location context (state, country, shift references) and provide a concrete IANA timezone (e.g. 'America/Detroit'). Mark as uncertain if inferred. NEVER leave as a placeholder sentence.
   • region.labor_laws: collect all referenced statutes as comma-separated TEXT (e.g. 'FMLA, ADA, USERRA, Workers Compensation')
   • rule.condition: describe the HRIS/system condition that triggers this rule in plain English — do not write SQL
   • rule.threshold: occurrence rules = 1 (unless the rule requires multiple events like third-minor-tardy = 3); perfect attendance = consecutive clean days
