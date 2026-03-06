@@ -75,7 +75,7 @@ def node_extract(state: FPIState) -> dict:
     model = _build_model().with_structured_output(KeywordExtraction)
     result = model.invoke([
         SystemMessage(content=_KEYWORD_SYSTEM_MSG),
-        HumanMessage(content=state["pdf_text"][:4000]),
+        HumanMessage(content=state["pdf_text"]),
     ])
     # Post-process: enforce realistic confidence
     if result.confidence_score >= 1.0:
@@ -106,7 +106,7 @@ def node_plan(state: FPIState) -> dict:
         "attendance policy document. The plan must describe how to INSERT this "
         "policy's data into the FPI configuration tables. Do NOT write SQL.\n\n"
         f"## Extracted Keywords\n\n{_format_keywords(state['keywords'])}\n\n"
-        f"## Policy Document (for context)\n\n{state['pdf_text'][:2000]}"
+        f"## Policy Document (for context)\n\n{state['pdf_text']}"
     )
     result = model.invoke([
         SystemMessage(content=_PLAN_SYSTEM_MSG),
