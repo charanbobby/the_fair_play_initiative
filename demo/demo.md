@@ -30,10 +30,11 @@
 
 - HR uploads a policy PDF/DOCX (or pastes text) to the system
 - LLM extracts keywords mapped to 8 database schema categories
-- LLM generates a structured ingestion plan (table-by-table INSERT steps, rule rows, confidence scores)
-- Human reviews extraction AND plan, rates each step (Good / Partial / Bad)
+- LLM reconciles extracted entities against existing DB records (catches typos, abbreviations, name variations; flags date overlaps and duplicate policies)
+- LLM generates a structured ingestion plan using matched IDs (table-by-table INSERT steps, rule rows, confidence scores)
+- Human reviews extraction, reconciliation warnings, AND plan — rates each step (Good / Partial / Bad)
 - Human explicitly approves execution — SQL runs in sandbox only
-- System tracks what was extracted, planned, and executed for every document
+- System tracks what was extracted, reconciled, planned, and executed for every document
 
 ### Template 2: Confidence-Routed Pipeline *(Medium Control, Medium Agency)*
 
@@ -59,7 +60,7 @@
 |-----|----------------------|---------------|------------|--------------|
 | **1** | 1 LLM call per document (single-shot extraction + SQL) | Meta-prompting, schema-aware structured output (Pydantic) | Human reviews 100% of outputs; playground-only execution | Keyword accuracy, SQL syntax validity, confidence score |
 | **2** | 3 LLM calls per document (extract → plan → generate SQL); heterogeneous model routing | Prompt distillation (Sonnet 4.6 → gpt-5-mini); per-step model selectors; structured plan as verification gate | Human review at plan stage; rule exclusion guardrails (8 categories); expected rule count bounds (10–30); confidence deduction rubric | Rule count vs. expected, plan–SQL alignment, per-step human ratings, token usage per model per step |
-| **3** | 3 LLM calls + feedback-driven model routing; aggregated rating stats per model | Feedback loop: human ratings build dataset → model comparison → confidence thresholds; cached playbooks for known policy patterns | Auto-approve >90% confidence; flag low-confidence for HTL; playground/production mode isolation; rollback on SQL failure | End-to-end success rate, model rating % (good/partial/bad), time-to-ingest, cost per policy, drift detection |
+| **3** | 4 LLM calls (extract + reconcile + plan + SQL); entity reconciliation adds ~1 call when DB has existing records (zero-cost pass-through on empty DB) | Feedback loop: human ratings → model comparison → confidence thresholds; **Entity reconciliation:** LLM fuzzy-matches extracted orgs/policies/regions against existing DB records (handles typos, abbreviations, name variations); deterministic conflict detection (date overlaps, active-policy overwrites); matched IDs flow downstream so plan/SQL reuse existing records instead of creating duplicates | Auto-approve >90% confidence; flag low-confidence for HTL; playground/production mode isolation; rollback on SQL failure; reconciliation gate (0.7 confidence threshold for ID reuse); conflict warnings surfaced before execution | End-to-end success rate, model rating % (good/partial/bad), time-to-ingest, cost per policy, entity match accuracy, conflict detection rate |
 
 ---
 
@@ -71,7 +72,7 @@ The experiment iterations (what we built) directly enable the trust phases (how 
 |----------------|--------------|----------------------|
 | **Itr 1:** Single-shot pipeline, litellm + instructor | Baseline extraction, confidence scoring, playground sandbox | **Phase 1 (Hands-On):** Human reviews everything, rates every step, system builds reliability baseline |
 | **Itr 2:** Decomposed pipeline (Extract → Plan → SQL), prompt distillation, model routing, Arize AX observability | Reviewable plan as verification gate, per-step model selectors, human feedback collection, token/cost tracking | **Phase 1→2 transition:** Feedback data accumulates; humans can compare model quality; plan step becomes the human checkpoint |
-| **Itr 3:** Rule exclusion guardrails, confidence deduction rubric, RAG evaluation (negative result), rule quality audit | Automated quality checks, model rating aggregation, guardrails that catch over-generation before human sees it | **Phase 2 (Building Trust):** High-confidence auto-approves; human reviews flagged items only; system proves itself through accumulated ratings |
+| **Itr 3:** Entity reconciliation (fuzzy org/policy matching against existing DB), conflict detection (date overlaps, active-policy overwrites), rule exclusion guardrails, confidence deduction rubric, RAG evaluation (negative result), rule quality audit | Database-aware pipeline that prevents duplicate entities, automated quality checks, model rating aggregation, guardrails that catch over-generation and data conflicts before human sees them | **Phase 2 (Building Trust):** High-confidence auto-approves; human reviews flagged items only; system proves itself through accumulated ratings; entity reconciliation prevents silent data corruption |
 | **Future:** Policy diff detection, drift monitoring, batch processing | Autonomous policy lifecycle management | **Phase 3 (Autonomous):** Routine work flows through automatically; humans handle exceptions only |
 
 ---
@@ -125,6 +126,7 @@ The experiment iterations (what we built) directly enable the trust phases (how 
 Each pipeline step can use a different LLM model:
 
 - **Step 1 (Extract):** `model_extract` parameter — keyword extraction is a classification task, cheaper models work well
+- **Step 1b (Reconcile):** `model_reconcile` parameter — entity matching against existing DB; skipped (zero-cost) when DB is empty
 - **Step 2 (Plan):** `model_plan` parameter — the verification gate, where quality matters most
 - **Step 3 (SQL):** `model_sql` parameter — follows the plan, cheaper models sufficient
 
@@ -193,17 +195,20 @@ This decomposition is what enabled every subsequent optimization: prompt distill
 
 6. **The feedback loop closes the circle.** Human ratings → model comparison → confidence thresholds → progressive autonomy. Without the ratings infrastructure, there's no path from Phase 1 to Phase 3.
 
+7. **Stateless pipelines corrupt shared databases.** An AI pipeline that doesn't know what's already in the database will silently create duplicates. Entity reconciliation — using the LLM's semantic understanding to match "ACMI Manufacturing Co" to "Acme Manufacturing Corporation" — is not optional for production use. Deterministic checks (date overlaps, active-policy collisions) catch what the LLM doesn't need to.
+
 ---
 
 ## DEMO FLOW (suggested)
 
 1. **Landing page** — show the Apprentice vision (Bottleneck → AI Problem → Solution)
 2. **Old vs New** — manual form vs AI pipeline side-by-side (on the landing page)
-3. **Upload a policy PDF** — show the 3-step pipeline in action
+3. **Upload a policy PDF** — show the 4-step pipeline in action
 4. **Step 1 (Extract)** — keyword chips, model selector, per-step feedback buttons
-5. **Step 2 (Plan)** — structured ingestion plan, confidence score, human review gate
-6. **Step 3 (SQL)** — generated SQL, sandbox execution, results verification
-7. **Playground mode** — reset, seed data, sample policies, safe testing
-8. **Model stats** — show feedback aggregation, per-model rating percentages
-9. **Trust lifecycle** — walk through Phase 1 → 2 → 3 using the landing page mockups
-10. **Iteration journey** — poster diagram showing how experiments built the trust infrastructure
+5. **Step 1b (Reconcile)** — entity matches with confidence %, conflict warnings (date overlaps, duplicate policies)
+6. **Step 2 (Plan)** — structured ingestion plan using matched IDs, confidence score, human review gate
+7. **Step 3 (SQL)** — generated SQL with correct FK references, sandbox execution, results verification
+8. **Playground mode** — reset, seed data, sample policies, safe testing
+9. **Model stats** — show feedback aggregation, per-model rating percentages
+10. **Trust lifecycle** — walk through Phase 1 → 2 → 3 using the landing page mockups
+11. **Iteration journey** — poster diagram showing how experiments built the trust infrastructure

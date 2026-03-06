@@ -48,7 +48,7 @@ LLM reads policy revisions → diffs against existing rules → updates autonomo
 |-----|---------------|---------------|------------|--------------|
 | **1** | 1 LLM call; single-shot extract+SQL; **black box** — opaque SQL, hard to verify what the AI decided | Meta-prompting (ChatGPT Playground, multi-shot samples) to define structured output shape + SQL plan templates; Pydantic models via `litellm + instructor` | Human reviews 100%; playground-only | Keyword accuracy, SQL validity, confidence |
 | **2** | 3 LLM calls — **decomposed because Itr 1 was a black box** (opaque SQL, no way to verify AI reasoning); **Extract:** ~10s/2.5K tok (gpt-4o-mini), ~31s/4.3K tok (gpt-5-mini); **Plan:** ~64s/9.5K tok (gpt-4o-mini), ~105s/13.3K tok (gpt-5-mini); **SQL:** ~52s/9.3K tok (gpt-5-mini) | Prompt distillation (Sonnet 4.6 → gpt-5-mini); per-step model selectors; **plan as verification gate**; **RAG experiment (negative result):** ChromaDB retrieval retrieved 97.3% of document (20/26 chunks), added 1.8x latency (584.8s vs 316.7s) and +80% tokens (64.6K vs 36K) — pure overhead for single-document exhaustive extraction. Full-text input is the right approach here; RAG adds value only for multi-document querying. | Human review at plan stage; rule exclusion guardrails (8 categories); rule count bounds (10–30); confidence deduction rubric | Rule count vs expected, plan–SQL alignment, per-step ratings, tokens per model per step |
-| **3** | 3 calls + feedback routing; **Full pipeline:** ~188s, ~27K tokens, ~$0.02–0.03 per policy | Feedback loop: human ratings → model comparison → confidence thresholds; aggregated rating stats per model per step; **Prompt refinement:** killed `[PLACEHOLDER]` passthrough (resolve or NULL), added few-shot SQL example, field semantics in schema (code ≠ name, IANA timezone), explicit org/region metadata extraction targets, self-validation checklist | Rule exclusion guardrails; confidence deduction rubric; playground/production mode isolation; rollback on SQL failure; value traceability constraint; self-validation gate (no placeholder strings, FK consistency) | Model rating % (good/partial/bad), cost per policy, time-to-ingest, placeholder leak rate (target: 0%) |
+| **3** | 4 calls (+ reconciliation); **Full pipeline:** ~188s, ~27K tokens, ~$0.02–0.03 per policy | Feedback loop: human ratings → model comparison → confidence thresholds; **Entity reconciliation:** LLM-powered fuzzy matching of orgs/policies/regions against existing DB records (handles typos, abbreviations, name variations); deterministic conflict detection (date overlaps, active-policy overwrites); **Prompt refinement:** killed `[PLACEHOLDER]` passthrough, few-shot SQL example, field semantics, self-validation checklist | Rule exclusion guardrails; confidence deduction rubric; playground/production mode isolation; rollback on SQL failure; entity reconciliation gate (0.7 confidence threshold); conflict warnings before execution | Model rating %, cost per policy, time-to-ingest, placeholder leak rate (0%), entity match accuracy, false-positive rate |
 
 ### Production Model Stats (from Supabase `analysis_logs`)
 
@@ -170,42 +170,48 @@ This decomposition enabled every subsequent optimization: prompt distillation, p
   Reason: exhaustive extraction needs the full document
 ```
 
-### Iteration 3 — Playground + Guardrails *(where we are today)*
+### Iteration 3 — Reconciliation + Guardrails *(where we are today)*
 
-**The problem from Itr 2:** Decomposition made the AI's reasoning visible, but validating every extracted rule across 20–30 rows was still hard. How do you know the rules are correct without seeing them in action?
+**The problem from Itr 2:** Decomposition made the AI's reasoning visible, but two critical gaps remained: (1) validating extracted rules across 20–30 rows was still hard, and (2) the pipeline was stateless — it didn't know what was already in the database. Upload the same company with a slightly different name ("ACMI Manufacturing Co" vs "Acme Manufacturing Corporation") and you get duplicate rows. Upload a policy with the same effective date as an existing one — no warning.
 
-**The solution:** Give the policy administrator a **playground** — a sandbox SQLite database they can reset, seed with sample data, and execute AI-generated SQL against without touching production. They upload a policy, review the plan, approve it, and *see how the rules actually affect the system*. If something's wrong, reset and try again. Production (PostgreSQL) blocks all AI-generated SQL execution — 403 Forbidden.
+**The solution:** Two things. First, a **playground** sandbox for safe SQL execution. Second, a new **entity reconciliation** step: after extraction, the system queries existing DB records and uses the LLM to semantically match extracted entities against them. It catches typos, abbreviations, and name variations — then runs deterministic conflict checks for date overlaps and active-policy collisions. The pipeline becomes *database-aware*.
 
 ```
-┌──────────┐     ┌───────────┐     ┌───────────┐     ┌───────────┐
-│  Upload  │────▶│  EXTRACT  │────▶│   PLAN    │────▶│    SQL    │
-│  Policy  │     │ + guardrails     │ + confidence    │ + validation
-└──────────┘     └─────┬─────┘     └─────┬─────┘     └─────┬─────┘
-                       │                 │                  │
-                 ┌─────▼─────┐     ┌─────▼─────┐     ┌─────▼─────┐
-                 │ 8-category│     │ Confidence │     │ Playground│
-                 │ rule      │     │ deduction  │     │ vs Prod   │
-                 │ exclusion │     │ rubric     │     │ isolation │
-                 └─────┬─────┘     └─────┬─────┘     └─────┬─────┘
-                       │                 │                  │
-                       ▼                 ▼                  ▼
-               ┌───────────────────────────────────────────────┐
-               │     Human still reviews 100% (Phase 1)        │
-               │     But system now collects:                   │
-               │       • Per-step ratings (G/P/B)              │
-               │       • Per-model token usage + latency       │
-               │       • Aggregated model stats via /stats     │
-               │                                               │
-               │     When enough data accumulates:             │
-               │         ┌──────────┴──────────┐               │
-               │         │                     │               │
-               │    ▼ > 90% Good           ▼ < 90%             │
-               │  ┌──────────┐       ┌──────────────┐         │
-               │  │  Future: │       │  Continue    │         │
-               │  │  Auto-   │       │  Human      │         │
-               │  │  approve │       │  Review     │         │
-               │  └──────────┘       └──────────────┘         │
-               └───────────────────────────────────────────────┘
+┌──────────┐     ┌───────────┐     ┌───────────┐     ┌───────────┐     ┌───────────┐
+│  Upload  │────▶│  EXTRACT  │────▶│ RECONCILE │────▶│   PLAN    │────▶│    SQL    │
+│  Policy  │     │ + guardrails     │ (NEW)           │ + confidence    │ + validation
+└──────────┘     └─────┬─────┘     └─────┬─────┘     └─────┬─────┘     └─────┬─────┘
+                       │                 │                  │                  │
+                 ┌─────▼─────┐     ┌─────▼─────┐     ┌─────▼─────┐     ┌─────▼─────┐
+                 │ 8-category│     │ LLM fuzzy  │     │ Confidence │     │ Playground│
+                 │ rule      │     │ matching   │     │ deduction  │     │ vs Prod   │
+                 │ exclusion │     │ vs existing│     │ rubric     │     │ isolation │
+                 │           │     │ DB records │     │            │     │           │
+                 │           │     │            │     │ Uses       │     │           │
+                 │           │     │ + date     │     │ matched    │     │           │
+                 │           │     │   overlap  │     │ IDs from   │     │           │
+                 │           │     │   detection│     │ reconcile  │     │           │
+                 └─────┬─────┘     └─────┬─────┘     └─────┬─────┘     └─────┬─────┘
+                       │                 │                  │                  │
+                       ▼                 ▼                  ▼                  ▼
+               ┌───────────────────────────────────────────────────────────────────┐
+               │     Human still reviews 100% (Phase 1)                           │
+               │     But system now collects:                                     │
+               │       • Per-step ratings (G/P/B)                                │
+               │       • Per-model token usage + latency                         │
+               │       • Aggregated model stats via /stats                       │
+               │       • Entity match confidence + conflict warnings             │
+               │                                                                  │
+               │     When enough data accumulates:                               │
+               │         ┌──────────┴──────────┐                                  │
+               │         │                     │                                  │
+               │    ▼ > 90% Good           ▼ < 90%                                │
+               │  ┌──────────┐       ┌──────────────┐                             │
+               │  │  Future: │       │  Continue    │                             │
+               │  │  Auto-   │       │  Human      │                             │
+               │  │  approve │       │  Review     │                             │
+               │  └──────────┘       └──────────────┘                             │
+               └───────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -230,3 +236,4 @@ This decomposition enabled every subsequent optimization: prompt distillation, p
 4. **Playground mode is not optional.** AI-generated SQL must never touch production.
 5. **RAG is not always the answer.** For single-document extraction, full-text beats retrieval (97.3% retrieved = pure overhead).
 6. **The feedback loop closes the circle.** Ratings → comparison → thresholds → autonomy.
+7. **Stateless pipelines corrupt shared databases.** Entity reconciliation (LLM fuzzy matching + deterministic conflict checks) prevents duplicate orgs/policies from accumulating silently.
