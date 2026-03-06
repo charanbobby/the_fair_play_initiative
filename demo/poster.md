@@ -1,7 +1,7 @@
 # APPRENTICE
 
 > **Capstone Project:** Building Agentic AI Applications with a Problem-First Approach
-> **Team:** Ifesinachi Eze
+> **Team:** Sricharan Sunkara, Pragyna Reddy
 > **Demo Date:** March 7, 2026
 
 ---
@@ -46,9 +46,9 @@ LLM reads policy revisions → diffs against existing rules → updates autonomo
 
 | Itr | Cost / Latency | Optimizations | Guardrails | Eval Metrics |
 |-----|---------------|---------------|------------|--------------|
-| **1** | 1 LLM call; single-shot extract+SQL | Meta-prompting; Pydantic structured output | Human reviews 100%; playground-only | Keyword accuracy, SQL validity, confidence |
-| **2** | 3 LLM calls; **Extract:** ~10s/2.5K tokens (gpt-4o-mini), ~31s/4.3K tokens (gpt-5-mini); **Plan:** ~64s/9.5K tokens (gpt-4o-mini), ~105s/13.3K tokens (gpt-5-mini); **SQL:** ~52s/9.3K tokens (gpt-5-mini) | Prompt distillation (Sonnet 4.6 → gpt-5-mini); per-step model selectors; plan as verification gate | Human review at plan stage; rule exclusion guardrails (8 categories); rule count bounds (10–30); confidence deduction rubric | Rule count vs expected, plan–SQL alignment, per-step ratings, tokens per model per step |
-| **3** | 3 calls + feedback routing; **Full pipeline:** ~188s, ~27K tokens, < $0.01 per policy | Feedback loop → model comparison → confidence thresholds | Auto-approve >90% confidence; playground/production isolation; rollback on SQL failure | Model rating % (good/partial/bad), cost per policy, drift detection |
+| **1** | 1 LLM call; single-shot extract+SQL; **black box** — opaque SQL, hard to verify what the AI decided | Meta-prompting (ChatGPT Playground, multi-shot samples) to define structured output shape + SQL plan templates; Pydantic models via `litellm + instructor` | Human reviews 100%; playground-only | Keyword accuracy, SQL validity, confidence |
+| **2** | 3 LLM calls — **decomposed because Itr 1 was a black box** (opaque SQL, no way to verify AI reasoning); **Extract:** ~10s/2.5K tok (gpt-4o-mini), ~31s/4.3K tok (gpt-5-mini); **Plan:** ~64s/9.5K tok (gpt-4o-mini), ~105s/13.3K tok (gpt-5-mini); **SQL:** ~52s/9.3K tok (gpt-5-mini) | Prompt distillation (Sonnet 4.6 → gpt-5-mini); per-step model selectors; **plan as verification gate**; **RAG experiment (negative result):** ChromaDB retrieval retrieved 97.3% of document (20/26 chunks), added 1.8x latency (584.8s vs 316.7s) and +80% tokens (64.6K vs 36K) — pure overhead for single-document exhaustive extraction. Full-text input is the right approach here; RAG adds value only for multi-document querying. | Human review at plan stage; rule exclusion guardrails (8 categories); rule count bounds (10–30); confidence deduction rubric | Rule count vs expected, plan–SQL alignment, per-step ratings, tokens per model per step |
+| **3** | 3 calls + feedback routing; **Full pipeline:** ~188s, ~27K tokens, < $0.01 per policy | Feedback loop: human ratings → model comparison → confidence thresholds; aggregated rating stats per model per step | Rule exclusion guardrails; confidence deduction rubric; playground/production mode isolation; rollback on SQL failure | Model rating % (good/partial/bad), cost per policy, time-to-ingest |
 
 ### Production Model Stats (from Supabase `analysis_logs`)
 
@@ -64,27 +64,51 @@ LLM reads policy revisions → diffs against existing rules → updates autonomo
 
 ## ITERATION DIAGRAMS
 
-### Iteration 1 — Single-Shot Pipeline
+### Iteration 1 — Single-Shot Pipeline (Black Box)
+
+**The challenge:** We gave the AI a document and a prompt. It produced SQL that added tables and rules — but validating each table was extremely difficult. The output was a black box: you could see the final SQL, but you had no way to verify *why* the AI chose those tables, joins, or values. No way to catch logic errors before execution.
+
+**Meta-prompting (ChatGPT Playground):** Used multi-shot samples to define (1) the Pydantic structured output shape (per-table keyword fields), and (2) the human-readable SQL plan template format. Fed multiple example policies to the LLM and iterated on the prompt templates that would later guide extraction and planning.
+
+**This led to the key insight:** we need to decompose the pipeline so the AI shows its reasoning at each step.
 
 ```
-┌──────────┐     ┌─────────────────────┐     ┌──────────┐     ┌──────────┐
-│  Upload  │────▶│  LLM: Extract + SQL │────▶│  Human   │────▶│ Sandbox  │
-│  Policy  │     │  (1 call)           │     │  Review  │     │ Execute  │
-└──────────┘     └─────────────────────┘     └──────────┘     └──────────┘
-                  litellm + instructor                         SQLite only
-                  Pydantic structured output
+┌──────────┐     ┌─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─┐     ┌──────────┐     ┌──────────┐
+│  Upload  │────▶  ██████████████████████ ────▶│  Human   │────▶│ Sandbox  │
+│  Policy  │     │ ██  BLACK BOX  ██████ │     │  Review  │     │ Execute  │
+└──────────┘      ██  1 LLM call  ██████       │          │     └──────────┘
+                 │ ██  Extract+SQL █████ │     │ Can see  │      SQLite only
+                  ██  (opaque)    ██████       │ output,  │
+                 │ ██████████████████████ │     │ can't    │
+                  ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─      │ verify   │
+                  litellm + instructor         │ reasoning│
+                  Pydantic structured output   └──────────┘
+
+  Problem: Human reviews SQL but has no visibility into
+  WHY the AI chose these tables, joins, or values.
+  ──────────────────────────────────────────────────────
+  ➜ Solution: Decompose into 3 transparent steps (Itr 2)
 ```
 
-### Iteration 2 — Decomposed Pipeline with Model Routing
+### Iteration 2 — Decomposed Pipeline (Transparent)
+
+**Why decompose?** Itr 1's black box produced opaque SQL. By splitting into Extract → Plan → SQL, each step produces a **reviewable artifact**. The Plan step is the key — it's a human-readable ingestion plan that a compliance officer can verify before any SQL runs.
+
+**Still challenging:** Even with decomposition, validating each extraction and every SQL rule the AI generates remained difficult. A single policy can produce 20–30 rules across multiple tables — manually checking each one is time-consuming. This drove us to Iteration 3: give the administrator a safe place to actually *run* the output and see the results.
+
+**RAG experiment (negative result):** Tried ChromaDB vector retrieval to replace brute-force text truncation. Result: retrieved 97.3% of the document (20 of 26 chunks), 1.8x slower (584.8s vs 316.7s), +80% more tokens (64.6K vs 36K). For single-document exhaustive extraction, the LLM needs the entire policy — RAG is pure overhead. RAG would add value for cross-policy querying (50+ policies) or when documents exceed the context window.
 
 ```
 ┌──────────┐     ┌───────────┐     ┌───────────┐     ┌───────────┐
 │  Upload  │────▶│  Step 1   │────▶│  Step 2   │────▶│  Step 3   │
 │  Policy  │     │  EXTRACT  │     │   PLAN    │     │    SQL    │
-│  (PDF/   │     │           │     │           │     │           │
-│  DOCX/   │     │ gpt-4o-   │     │ gpt-5-   │     │ gpt-5-   │
-│  text)   │     │ mini      │     │ mini      │     │ mini      │
-└──────────┘     │ ~10s      │     │ ~105s     │     │ ~52s      │
+│  (PDF/   │     │  "I found │     │  "I'll    │     │  "Here's  │
+│  DOCX/   │     │   these   │     │   do      │     │   the     │
+│  text)   │     │   rules"  │     │   this"   │     │   code"   │
+└──────────┘     │           │     │           │     │           │
+                 │ gpt-4o-   │     │ gpt-5-   │     │ gpt-5-   │
+                 │ mini      │     │ mini      │     │ mini      │
+                 │ ~10s      │     │ ~105s     │     │ ~52s      │
                  │ 2.5K tok  │     │ 13.3K tok │     │ 9.3K tok  │
                  └─────┬─────┘     └─────┬─────┘     └─────┬─────┘
                        │                 │                  │
@@ -100,11 +124,35 @@ LLM reads policy revisions → diffs against existing rules → updates autonomo
                  │  (tokens, latency, model, rating per step)  │
                  └─────────────────────────────────────────────┘
 
-  Prompt Distillation: Sonnet 4.6 (90s, 14.9K tok) → encode 6 reasoning
-  patterns → gpt-5-mini gets same quality at 1/10th cost
+  Prompt Distillation — cost savings:
+  ┌─────────────────────────────────────────────────────────────┐
+  │  Sonnet 4.6 (plan step):  90s, 14,920 tok, ~$0.12/run     │
+  │  gpt-5-mini (plan step): 105s, 13,337 tok, ~$0.01/run     │
+  │                                                             │
+  │  How: Run Sonnet once → extract 6 structural reasoning     │
+  │  patterns (INSERT order, ID chaining, rule granularity,    │
+  │  value derivation, natural keys, existence checks) →       │
+  │  encode as PLANNING GUIDANCE in gpt-5-mini's system prompt │
+  │                                                             │
+  │  Result: ~12x cost reduction, same output quality,         │
+  │  no fine-tuning, no training data, instantly reversible    │
+  └─────────────────────────────────────────────────────────────┘
+
+  RAG Experiment (REJECTED):
+  ┌────────────┐     ┌────────────┐     ┌────────────┐
+  │ ChromaDB   │────▶│ Retrieve   │────▶│ Feed to    │
+  │ embed 26   │     │ 20 chunks  │     │ LLM        │
+  │ chunks     │     │ (97.3%)    │     │            │
+  └────────────┘     └────────────┘     └────────────┘
+  Result: 584.8s, 64.6K tokens — 1.8x slower, +80% tokens
+  Reason: exhaustive extraction needs the full document
 ```
 
-### Iteration 3 — Confidence-Routed with Guardrails
+### Iteration 3 — Playground + Guardrails *(where we are today)*
+
+**The problem from Itr 2:** Decomposition made the AI's reasoning visible, but validating every extracted rule across 20–30 rows was still hard. How do you know the rules are correct without seeing them in action?
+
+**The solution:** Give the policy administrator a **playground** — a sandbox SQLite database they can reset, seed with sample data, and execute AI-generated SQL against without touching production. They upload a policy, review the plan, approve it, and *see how the rules actually affect the system*. If something's wrong, reset and try again. Production (PostgreSQL) blocks all AI-generated SQL execution — 403 Forbidden.
 
 ```
 ┌──────────┐     ┌───────────┐     ┌───────────┐     ┌───────────┐
@@ -120,18 +168,21 @@ LLM reads policy revisions → diffs against existing rules → updates autonomo
                        │                 │                  │
                        ▼                 ▼                  ▼
                ┌───────────────────────────────────────────────┐
-               │              Confidence Score                  │
-               │                    │                           │
+               │     Human still reviews 100% (Phase 1)        │
+               │     But system now collects:                   │
+               │       • Per-step ratings (G/P/B)              │
+               │       • Per-model token usage + latency       │
+               │       • Aggregated model stats via /stats     │
+               │                                               │
+               │     When enough data accumulates:             │
                │         ┌──────────┴──────────┐               │
                │         │                     │               │
-               │    ▼ > 90%                ▼ < 90%             │
+               │    ▼ > 90% Good           ▼ < 90%             │
                │  ┌──────────┐       ┌──────────────┐         │
-               │  │  Auto-   │       │  Flag for    │         │
-               │  │  approve │       │  Human Review│         │
+               │  │  Future: │       │  Continue    │         │
+               │  │  Auto-   │       │  Human      │         │
+               │  │  approve │       │  Review     │         │
                │  └──────────┘       └──────────────┘         │
-               │                                               │
-               │  Feedback Loop:                               │
-               │  ratings → model stats → thresholds → trust   │
                └───────────────────────────────────────────────┘
 ```
 
