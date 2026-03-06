@@ -130,29 +130,34 @@ async def analyze_policy(
             model_plan=model_plan,
         )
 
-        # Auto-save analysis logs for token tracking
-        default_model = settings.LLM_MODEL or "gpt-4o-mini"
-        usage = result.token_usage
-        if usage:
-            db.add(models.AnalysisLog(
-                filename=filename,
-                step="extract",
-                llm_model=model_extract or default_model,
-                prompt_tokens=usage.extract_prompt,
-                completion_tokens=usage.extract_completion,
-                total_tokens=usage.extract_total,
-                duration_ms=usage.extract_duration_ms,
-            ))
-            db.add(models.AnalysisLog(
-                filename=filename,
-                step="plan",
-                llm_model=model_plan or default_model,
-                prompt_tokens=usage.plan_prompt,
-                completion_tokens=usage.plan_completion,
-                total_tokens=usage.plan_total,
-                duration_ms=usage.plan_duration_ms,
-            ))
-            db.commit()
+        # Auto-save analysis logs for token tracking (non-fatal)
+        try:
+            default_model = settings.LLM_MODEL or "gpt-4o-mini"
+            usage = result.token_usage
+            if usage:
+                db.add(models.AnalysisLog(
+                    filename=filename,
+                    step="extract",
+                    llm_model=model_extract or default_model,
+                    prompt_tokens=usage.extract_prompt,
+                    completion_tokens=usage.extract_completion,
+                    total_tokens=usage.extract_total,
+                    duration_ms=usage.extract_duration_ms,
+                ))
+                db.add(models.AnalysisLog(
+                    filename=filename,
+                    step="plan",
+                    llm_model=model_plan or default_model,
+                    prompt_tokens=usage.plan_prompt,
+                    completion_tokens=usage.plan_completion,
+                    total_tokens=usage.plan_total,
+                    duration_ms=usage.plan_duration_ms,
+                ))
+                db.commit()
+        except Exception:
+            import logging
+            logging.getLogger(__name__).warning("Failed to save analysis logs", exc_info=True)
+            db.rollback()
 
         return result
     except ValueError as exc:
