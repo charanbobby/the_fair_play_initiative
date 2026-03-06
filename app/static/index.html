@@ -113,7 +113,7 @@
               <h1 class="text-xl font-bold">The Fair Play Initiative</h1>
               <p class="text-xs text-slate-400">
                 Balanced Attendance Management
-                <span class="ml-2 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.7.1</span>
+                <span class="ml-2 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.7.2</span>
                 <span id="playground-badge" class="ml-1 bg-amber-500 text-amber-50 text-xs font-mono px-1.5 py-0.5 rounded hidden">Playground</span>
               </p>
             </div>
@@ -399,12 +399,18 @@
               <div id="model-card-plan" class="hidden mt-1 px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs text-slate-500"></div>
               <div id="model-stats-plan" class="hidden mt-1 px-2 py-1 text-xs text-slate-600"></div>
             </div>
-            <div class="relative" title="Coming soon — SQL generation node not yet wired">
-              <label for="llm-model-sql" class="block text-xs font-medium text-slate-400 mb-1">
+            <div>
+              <label for="llm-model-sql" class="block text-xs font-medium text-slate-500 mb-1">
                 <i data-lucide="database" class="w-3.5 h-3.5 inline -mt-0.5"></i>
                 SQL Generation Model
               </label>
-              <select id="llm-model-sql" class="llm-model-select border border-slate-200 rounded-lg px-3 py-2 text-sm bg-slate-100 w-full text-slate-400 cursor-not-allowed" disabled></select>
+              <select id="llm-model-sql" class="llm-model-select border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white w-full" onchange="showModelCard('sql')"></select>
+              <div id="model-card-sql" class="hidden mt-1 px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs text-slate-500"></div>
+              <div id="model-stats-sql" class="hidden mt-1 px-2 py-1 text-xs text-slate-600"></div>
+              <div class="flex items-center gap-2 mt-1.5">
+                <input type="checkbox" id="execute-sql-toggle" class="rounded border-slate-300 accent-indigo-600">
+                <label for="execute-sql-toggle" class="text-xs text-slate-500">Execute SQL after generation</label>
+              </div>
             </div>
           </div>
 
@@ -500,6 +506,10 @@
                 <i data-lucide="hash" class="w-3.5 h-3.5"></i>
                 Planning: <span id="tokens-plan" class="font-mono font-semibold">—</span> tokens
               </div>
+              <div id="tokens-sql-wrapper" class="hidden flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-lg">
+                <i data-lucide="hash" class="w-3.5 h-3.5"></i>
+                SQL Gen: <span id="tokens-sql" class="font-mono font-semibold">—</span> tokens
+              </div>
             </div>
 
             <!-- Rich view (default) -->
@@ -542,6 +552,38 @@
                   <!-- Populated by JS -->
                 </div>
               </div>
+
+              <!-- Divider -->
+              <div id="sql-divider" class="border-t border-slate-200 my-6 hidden"></div>
+
+              <!-- SQL Generation Results -->
+              <div id="sql-section-wrapper" class="hidden">
+                <div class="flex items-center justify-between mb-3">
+                  <h5 class="text-sm font-semibold text-slate-600 uppercase tracking-wide">
+                    Generated SQL
+                  </h5>
+                  <div id="feedback-sql" class="flex items-center gap-1" data-step="sql">
+                    <span class="text-xs text-slate-400 mr-1">Rate:</span>
+                    <button onclick="submitFeedback('sql','good')" class="feedback-btn px-2 py-0.5 rounded text-xs border border-slate-200 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-700 transition" title="Good">Good</button>
+                    <button onclick="submitFeedback('sql','partial')" class="feedback-btn px-2 py-0.5 rounded text-xs border border-slate-200 hover:bg-amber-50 hover:border-amber-300 hover:text-amber-700 transition" title="Partial">Partial</button>
+                    <button onclick="submitFeedback('sql','bad')" class="feedback-btn px-2 py-0.5 rounded text-xs border border-slate-200 hover:bg-red-50 hover:border-red-300 hover:text-red-700 transition" title="Bad">Bad</button>
+                  </div>
+                </div>
+                <div id="sql-section" class="min-w-0">
+                  <!-- Populated by JS -->
+                </div>
+              </div>
+
+              <!-- Execution Results -->
+              <div id="exec-section-wrapper" class="hidden">
+                <div class="border-t border-slate-200 my-6"></div>
+                <h5 class="text-sm font-semibold text-slate-600 uppercase tracking-wide mb-3">
+                  Execution Results
+                </h5>
+                <div id="exec-section" class="min-w-0">
+                  <!-- Populated by JS -->
+                </div>
+              </div>
             </div>
 
             <!-- Plain-text view (hidden, matches notebook _format_plan output) -->
@@ -558,6 +600,15 @@
                   SQL Ingestion Plan
                 </h5>
                 <pre id="plain-plan" class="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs text-slate-700 font-mono whitespace-pre-wrap leading-relaxed max-h-[32rem] overflow-y-auto"></pre>
+              </div>
+              <div id="plain-sql-wrapper" class="hidden">
+                <div class="border-t border-slate-200 my-6"></div>
+                <div>
+                  <h5 class="text-sm font-semibold text-slate-600 uppercase tracking-wide mb-3">
+                    Generated SQL
+                  </h5>
+                  <pre id="plain-sql" class="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs text-slate-700 font-mono whitespace-pre-wrap leading-relaxed max-h-[32rem] overflow-y-auto"></pre>
+                </div>
               </div>
             </div>
           </div>
@@ -2358,9 +2409,13 @@
 
           const extractModel = document.getElementById("llm-model-extract")?.value || "";
           const planModel = document.getElementById("llm-model-plan")?.value || "";
+          const sqlModel = document.getElementById("llm-model-sql")?.value || "";
+          const executeSQL = document.getElementById("execute-sql-toggle")?.checked || false;
           const params = new URLSearchParams();
           if (extractModel) params.set("model_extract", extractModel);
           if (planModel) params.set("model_plan", planModel);
+          if (sqlModel) params.set("model_sql", sqlModel);
+          if (executeSQL && sqlModel) params.set("execute", "true");
           const qs = params.toString();
           const analyzeUrl = `/api/v1/policies/analyze${qs ? "?" + qs : ""}`;
 
@@ -2404,9 +2459,13 @@
 
           const extractModel = document.getElementById("llm-model-extract")?.value || "";
           const planModel = document.getElementById("llm-model-plan")?.value || "";
+          const sqlModel = document.getElementById("llm-model-sql")?.value || "";
+          const executeSQL = document.getElementById("execute-sql-toggle")?.checked || false;
           const params = new URLSearchParams();
           if (extractModel) params.set("model_extract", extractModel);
           if (planModel) params.set("model_plan", planModel);
+          if (sqlModel) params.set("model_sql", sqlModel);
+          if (executeSQL && sqlModel) params.set("execute", "true");
           const qs = params.toString();
           const analyzeUrl = `/api/v1/policies/analyze${qs ? "?" + qs : ""}`;
 
@@ -2523,6 +2582,13 @@
           document.getElementById("tokens-plan").textContent =
             (usage.plan_total || 0).toLocaleString();
           document.getElementById("token-usage").classList.remove("hidden");
+          if (usage.sql_total > 0) {
+            document.getElementById("tokens-sql").textContent =
+              (usage.sql_total || 0).toLocaleString();
+            document.getElementById("tokens-sql-wrapper").classList.remove("hidden");
+          } else {
+            document.getElementById("tokens-sql-wrapper").classList.add("hidden");
+          }
         }
 
         // ── Reset feedback buttons ─────────────────────────────────────────
@@ -2536,6 +2602,12 @@
         const esc = (s) => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
         document.getElementById("plain-keywords").textContent = data.formatted_keywords || "(no keywords)";
         document.getElementById("plain-plan").textContent = data.formatted_plan || "(no plan)";
+        if (data.formatted_sql) {
+          document.getElementById("plain-sql").textContent = data.formatted_sql;
+          document.getElementById("plain-sql-wrapper").classList.remove("hidden");
+        } else {
+          document.getElementById("plain-sql-wrapper").classList.add("hidden");
+        }
 
         // ── Keywords section ──────────────────────────────────────────────
         const kw = data.keywords || {};
@@ -2792,6 +2864,97 @@
         }
 
         planContainer.innerHTML = planHTML || `<p class="text-sm text-slate-400">No plan generated.</p>`;
+
+        // ── SQL Generation section ──────────────────────────────────────
+        const sqlResult = data.sql_result;
+        const sqlWrapper = document.getElementById("sql-section-wrapper");
+        const sqlDivider = document.getElementById("sql-divider");
+
+        if (sqlResult && sqlResult.sql_query) {
+          sqlWrapper.classList.remove("hidden");
+          sqlDivider.classList.remove("hidden");
+
+          let sqlHTML = "";
+
+          // Confidence + metadata bar
+          const sqlPct = Math.round((sqlResult.confidence_score || 0) * 100);
+          sqlHTML += `<div class="flex flex-wrap gap-3 items-center mb-3">`;
+          sqlHTML += renderConfidenceBadge("SQL Generation", sqlPct);
+          sqlHTML += `<span class="text-xs text-slate-400">${sqlResult.statement_count || 0} statements</span>`;
+          sqlHTML += `<span class="text-xs text-slate-400">${sqlResult.rule_count || 0} rules</span>`;
+          if (sqlResult.tables_affected && sqlResult.tables_affected.length)
+            sqlHTML += `<span class="text-xs text-slate-400">${sqlResult.tables_affected.join(", ")}</span>`;
+          sqlHTML += `</div>`;
+
+          // ID chain
+          if (sqlResult.id_chain && sqlResult.id_chain.length > 0) {
+            sqlHTML += `<div class="mb-3">
+              <span class="text-xs font-semibold text-slate-500 uppercase">ID Chain</span>
+              <div class="flex flex-wrap gap-1.5 mt-1">
+                ${sqlResult.id_chain.map(c =>
+                  `<code class="text-xs bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded">${esc(c)}</code>`
+                ).join(` <span class="text-slate-300">&rarr;</span> `)}
+              </div>
+            </div>`;
+          }
+
+          // SQL code block (collapsible)
+          sqlHTML += `<details class="border border-slate-200 rounded-lg">
+            <summary class="cursor-pointer px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">
+              View SQL (${sqlResult.statement_count || 0} statements)
+            </summary>
+            <pre class="px-4 pb-4 text-xs text-slate-600 font-mono whitespace-pre-wrap leading-relaxed max-h-[32rem] overflow-y-auto bg-slate-50">${esc(sqlResult.sql_query)}</pre>
+          </details>`;
+
+          document.getElementById("sql-section").innerHTML = sqlHTML;
+        } else {
+          sqlWrapper.classList.add("hidden");
+          sqlDivider.classList.add("hidden");
+        }
+
+        // ── Execution Results section ───────────────────────────────────
+        const execResult = data.query_results;
+        const execWrapper = document.getElementById("exec-section-wrapper");
+
+        if (execResult) {
+          execWrapper.classList.remove("hidden");
+          let execHTML = "";
+
+          if (execResult.error) {
+            execHTML += `<div class="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+              <strong>Execution Error:</strong> ${esc(execResult.error)}
+            </div>`;
+          } else {
+            execHTML += `<div class="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+              <div class="flex items-center gap-2 mb-3">
+                <i data-lucide="check-circle" class="w-5 h-5 text-emerald-600"></i>
+                <span class="text-sm font-semibold text-emerald-700">SQL Executed Successfully</span>
+                <span class="text-xs text-slate-400 ml-auto">${execResult.execution_duration_ms || 0}ms</span>
+              </div>
+              <table class="w-full text-sm">
+                <thead><tr class="text-xs text-slate-500 uppercase">
+                  <th class="text-left pb-2">Table</th>
+                  <th class="text-right pb-2">Total Rows</th>
+                </tr></thead>
+                <tbody>`;
+            for (const [tbl, count] of Object.entries(execResult.row_counts || {})) {
+              execHTML += `<tr class="border-t border-emerald-100">
+                <td class="py-1.5 font-mono text-xs">${esc(tbl)}</td>
+                <td class="py-1.5 text-right font-mono font-semibold">${count}</td>
+              </tr>`;
+            }
+            execHTML += `<tr class="border-t-2 border-emerald-200 font-semibold">
+              <td class="py-1.5">Total</td>
+              <td class="py-1.5 text-right font-mono">${execResult.total_rows || 0}</td>
+            </tr>`;
+            execHTML += `</tbody></table></div>`;
+          }
+
+          document.getElementById("exec-section").innerHTML = execHTML;
+        } else {
+          execWrapper.classList.add("hidden");
+        }
+
         lucide.createIcons();
       }
 
@@ -2799,9 +2962,16 @@
         document.getElementById("analysis-results").classList.add("hidden");
         document.getElementById("keywords-section").innerHTML = "";
         document.getElementById("plan-section").innerHTML = "";
+        document.getElementById("sql-section").innerHTML = "";
+        document.getElementById("sql-section-wrapper").classList.add("hidden");
+        document.getElementById("sql-divider").classList.add("hidden");
+        document.getElementById("exec-section").innerHTML = "";
+        document.getElementById("exec-section-wrapper").classList.add("hidden");
         document.getElementById("plain-keywords").textContent = "";
         document.getElementById("plain-plan").textContent = "";
+        document.getElementById("plain-sql-wrapper").classList.add("hidden");
         document.getElementById("token-usage").classList.add("hidden");
+        document.getElementById("tokens-sql-wrapper").classList.add("hidden");
         _lastAnalysisData = null;
         // Reset feedback buttons
         document.querySelectorAll(".feedback-btn").forEach(btn => {

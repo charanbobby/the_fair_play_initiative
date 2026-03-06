@@ -82,19 +82,24 @@ async def analyze_policy(
     text: Optional[str] = Form(None),
     model_extract: Optional[str] = None,
     model_plan: Optional[str] = None,
+    model_sql: Optional[str] = None,
+    execute: bool = False,
     db: Session = Depends(get_db),
 ):
     """
     Analyse a policy document and receive:
       - Extracted keywords mapped to the FPI schema entities
-      - A structured SQL ingestion plan (no database writes performed)
+      - A structured SQL ingestion plan
+      - Optionally: generated SQL and execution results
 
     Supply EITHER a file upload (PDF, DOCX, TXT) or raw text via the
     ``text`` form field.  At least one must be provided.
 
-    Optional query parameters override the default LLM model per step:
+    Optional query parameters:
       - model_extract: model for keyword extraction
       - model_plan: model for SQL ingestion planning
+      - model_sql: model for SQL generation (enables step 3)
+      - execute: if true AND model_sql is set, execute SQL (playground only)
     """
     from pathlib import Path
     from app.config import settings
@@ -123,12 +128,24 @@ async def analyze_policy(
         )
 
     try:
-        from app.services.policy_analyzer import analyze_policy_document
+        from app.services.policy_analyzer import analyze_policy_document, execute_sql_against_db
         result = await analyze_policy_document(
             filename, content,
             model_extract=model_extract,
             model_plan=model_plan,
+            model_sql=model_sql,
         )
+
+        # ── Execute SQL if requested (playground only) ────────────────
+        if execute and result.sql_result and result.sql_result.sql_query:
+            if not settings.IS_PLAYGROUND:
+                raise HTTPException(
+                    status_code=400,
+                    detail="SQL execution is only available in Playground mode.",
+                )
+            is_sqlite = settings.DATABASE_URL.startswith("sqlite")
+            query_results = execute_sql_against_db(db, result.sql_result, is_sqlite)
+            result.query_results = query_results
 
         # Auto-save analysis logs for token tracking (non-fatal)
         try:
@@ -153,6 +170,16 @@ async def analyze_policy(
                     total_tokens=usage.plan_total,
                     duration_ms=usage.plan_duration_ms,
                 ))
+                if usage.sql_total > 0:
+                    db.add(models.AnalysisLog(
+                        filename=filename,
+                        step="sql",
+                        llm_model=model_sql or default_model,
+                        prompt_tokens=usage.sql_prompt,
+                        completion_tokens=usage.sql_completion,
+                        total_tokens=usage.sql_total,
+                        duration_ms=usage.sql_duration_ms,
+                    ))
                 db.commit()
         except Exception:
             import logging

@@ -1,18 +1,24 @@
 """
 app/services/policy_analyzer.py
 ---------------------------------
-LangGraph pipeline: PDF/DOCX/TXT → keyword extraction → SQL ingestion plan.
+LangGraph pipeline: PDF/DOCX/TXT → keyword extraction → SQL ingestion plan
+                    → (optional) SQL generation.
 
-Nodes (steps 1 and 2 only — no SQL generation or DB writes):
-    node_extract  — LLM extracts schema-mapped keywords from policy text
-    node_plan     — LLM devises a structured INSERT plan from keywords
+Nodes:
+    node_extract      — LLM extracts schema-mapped keywords from policy text
+    node_plan         — LLM devises a structured INSERT plan from keywords
+    node_generate_sql — LLM generates executable INSERT statements from the plan
 
-Graph:  START → node_extract → node_plan → END
+Graph:  START → node_extract → node_plan → [node_generate_sql]? → END
+
+SQL execution happens outside the graph (in the endpoint) using the FastAPI
+db session — see ``execute_sql_against_db()``.
 """
 
 from __future__ import annotations
 
 import io
+import re
 from pathlib import Path
 from typing import TypedDict
 
@@ -21,7 +27,14 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
 
 from app.config import settings
-from app.schemas import KeywordExtraction, PolicyAnalysisResponse, SQLQueryPlan, TokenUsage
+from app.schemas import (
+    KeywordExtraction,
+    PolicyAnalysisResponse,
+    QueryResults,
+    SQLGeneration,
+    SQLQueryPlan,
+    TokenUsage,
+)
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -39,6 +52,9 @@ _SCHEMA_JSON: str = (_PROMPTS_DIR / "schema.json").read_text(encoding="utf-8")
 
 # Inject schema into plan prompt once at load time
 _PLAN_SYSTEM_MSG: str = _PLAN_SYSTEM_TEMPLATE.replace("{{schema}}", _SCHEMA_JSON)
+
+_SQL_GEN_SYSTEM_TEMPLATE: str = (_PROMPTS_DIR / "03_sql_generation.md").read_text(encoding="utf-8")
+_SQL_GEN_SYSTEM_MSG: str = _SQL_GEN_SYSTEM_TEMPLATE.replace("{{schema}}", _SCHEMA_JSON)
 
 # ---------------------------------------------------------------------------
 # LLM — ChatOpenAI pointed at OpenRouter
@@ -63,12 +79,16 @@ class FPIState(TypedDict):
     pdf_text: str
     model_extract: str | None
     model_plan: str | None
+    model_sql: str | None
     keywords: KeywordExtraction | None
     sql_plan: SQLQueryPlan | None
+    sql_result: SQLGeneration | None
     extract_tokens: dict | None
     plan_tokens: dict | None
+    sql_tokens: dict | None
     extract_duration_ms: int | None
     plan_duration_ms: int | None
+    sql_duration_ms: int | None
     error: str | None
 
 
@@ -158,17 +178,65 @@ def node_plan(state: FPIState) -> dict:
     return {"sql_plan": result, "plan_tokens": tokens, "plan_duration_ms": duration_ms}
 
 
+def node_generate_sql(state: FPIState) -> dict:
+    """Generate executable SQL INSERT statements from the approved plan."""
+    if not state.get("sql_plan"):
+        return {"error": "node_generate_sql: no sql_plan in state"}
+    if not state.get("keywords"):
+        return {"error": "node_generate_sql: no keywords in state"}
+
+    import time
+    t0 = time.perf_counter()
+    model = _build_model(state.get("model_sql")).with_structured_output(
+        SQLGeneration, include_raw=True
+    )
+    human_msg = (
+        "Generate INSERT SQL implementing the ingestion plan below.\n\n"
+        "## Approved Ingestion Plan\n\n"
+        f"{_format_plan_for_sql_prompt(state['sql_plan'])}\n\n"
+        "## Extracted Keywords (source values for INSERT literals)\n\n"
+        f"{_format_keywords(state['keywords'])}"
+    )
+    raw_result = model.invoke([
+        SystemMessage(content=_SQL_GEN_SYSTEM_MSG),
+        HumanMessage(content=human_msg),
+    ])
+    duration_ms = int((time.perf_counter() - t0) * 1000)
+    result = raw_result["parsed"]
+    tokens = _extract_token_usage(raw_result.get("raw"))
+
+    # Post-process: enforce realistic confidence
+    if result.confidence_score >= 1.0:
+        result.confidence_score = 0.82
+    result.confidence_score = round(min(result.confidence_score, 0.95), 2)
+
+    return {
+        "sql_result": result,
+        "sql_tokens": tokens,
+        "sql_duration_ms": duration_ms,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Graph construction
 # ---------------------------------------------------------------------------
+
+def _route_after_plan(state: FPIState) -> str:
+    """Route to SQL generation if model_sql is provided, otherwise end."""
+    if state.get("model_sql"):
+        return "node_generate_sql"
+    return END
+
 
 def _build_graph() -> StateGraph:
     g = StateGraph(FPIState)
     g.add_node("node_extract", node_extract)
     g.add_node("node_plan", node_plan)
+    g.add_node("node_generate_sql", node_generate_sql)
     g.add_edge(START, "node_extract")
     g.add_edge("node_extract", "node_plan")
-    g.add_edge("node_plan", END)
+    g.add_conditional_edges("node_plan", _route_after_plan)
+    g.add_edge("node_generate_sql", END)
     return g.compile()
 
 
@@ -371,6 +439,153 @@ def _format_plan(plan: SQLQueryPlan) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Helper: format plan for the SQL generation prompt
+# ---------------------------------------------------------------------------
+
+def _format_plan_for_sql_prompt(plan: SQLQueryPlan) -> str:
+    """Structured plan format optimised for the SQL generation model."""
+    lines = [f"Objective: {plan.objective}", ""]
+
+    if plan.tables_required:
+        lines.append("Tables (in INSERT order):")
+        for t in plan.tables_required:
+            lines.append(f"  {t.table} AS {t.alias} — {t.purpose}")
+        lines.append("")
+
+    if plan.joins:
+        lines.append("FK Dependencies:")
+        for j in plan.joins:
+            lines.append(f"  {j.left} -> {j.right} ON {j.condition}")
+        lines.append("")
+
+    if plan.where_filters:
+        lines.append("Existence checks:")
+        for f in plan.where_filters:
+            lines.append(f"  {f.description}")
+            lines.append(f"    expr: {f.expression}  (keyword: {f.source_keyword})")
+        lines.append("")
+
+    if plan.table_steps:
+        lines.append("Ingestion Steps:")
+        for step in plan.table_steps:
+            col_str = "; ".join(f"{c.column}={c.value_source}" for c in step.columns)
+            lines.append(
+                f"  {step.step_number}) {step.table} — {step.strategy}; "
+                f"columns: {col_str}; natural key: {step.natural_key}"
+            )
+        lines.append("")
+
+    if plan.rule_rows:
+        lines.append(f"Rule Rows ({len(plan.rule_rows)} total):")
+        for r in plan.rule_rows:
+            lines.append(
+                f"  {r.id}: {r.name} | {r.category} | thresh={r.threshold} | "
+                f"pts={r.points} | active={r.active}"
+            )
+        lines.append("")
+
+    if plan.id_chaining_summary:
+        lines.append("ID Chaining:")
+        for c in plan.id_chaining_summary:
+            lines.append(f"  {c}")
+        lines.append("")
+
+    if plan.uses_cte and plan.cte_description:
+        lines.append("Procedural plan (cte_description):")
+        lines.append(plan.cte_description)
+
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# SQL Execution (called from endpoint, not from graph)
+# ---------------------------------------------------------------------------
+
+# Table name mapping: schema.json (singular) → ORM/DB (plural)
+_TABLE_NAME_MAP = {
+    "organization": "organizations",
+    "region": "regions",
+    "policy": "policies",
+    "rule": "rules",
+    # organization_region stays the same
+}
+
+# Config tables to count after execution (actual DB names)
+_CONFIG_TABLES = ["organizations", "regions", "organization_region", "policies", "rules"]
+
+
+def _rewrite_table_names(sql: str) -> str:
+    """Rewrite singular table names in LLM-generated SQL to match actual DB schema.
+
+    Uses word-boundary regex. Safe because ``\\b`` treats ``_`` as a word char,
+    so ``organization_id`` and ``organization_region`` are NOT matched.
+    """
+    for singular, plural in _TABLE_NAME_MAP.items():
+        sql = re.sub(rf"\b{singular}\b", plural, sql)
+    return sql
+
+
+def execute_sql_against_db(
+    db,
+    sql_result: SQLGeneration,
+    is_sqlite: bool,
+) -> QueryResults:
+    """Execute LLM-generated SQL against the database.
+
+    Args:
+        db: SQLAlchemy session from FastAPI dependency
+        sql_result: The SQLGeneration output from the LLM
+        is_sqlite: Whether we're running against SQLite
+    """
+    import time
+    from sqlalchemy import text
+
+    t0 = time.perf_counter()
+
+    raw_sql = sql_result.sql_query.strip()
+    if not raw_sql:
+        return QueryResults(error="Empty SQL query")
+
+    rewritten_sql = _rewrite_table_names(raw_sql)
+
+    try:
+        if is_sqlite:
+            raw_conn = db.get_bind().raw_connection()
+            raw_conn.executescript(rewritten_sql)
+            raw_conn.commit()
+        else:
+            statements = [s.strip() for s in rewritten_sql.split(";") if s.strip()]
+            for stmt in statements:
+                db.execute(text(stmt))
+            db.commit()
+
+        counts = {}
+        total = 0
+        for tbl in _CONFIG_TABLES:
+            try:
+                row = db.execute(text(f"SELECT COUNT(*) FROM {tbl}")).fetchone()
+                count = row[0] if row else 0
+                counts[tbl] = count
+                total += count
+            except Exception:
+                counts[tbl] = 0
+
+        duration_ms = int((time.perf_counter() - t0) * 1000)
+        return QueryResults(
+            row_counts=counts,
+            total_rows=total,
+            execution_duration_ms=duration_ms,
+        )
+    except Exception as exc:
+        db.rollback()
+        duration_ms = int((time.perf_counter() - t0) * 1000)
+        return QueryResults(
+            error=str(exc),
+            execution_duration_ms=duration_ms,
+        )
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -379,10 +594,11 @@ async def analyze_policy_document(
     content: bytes,
     model_extract: str | None = None,
     model_plan: str | None = None,
+    model_sql: str | None = None,
 ) -> PolicyAnalysisResponse:
     """
     Extract text from the uploaded file, run the LangGraph pipeline,
-    and return keywords + SQL ingestion plan.
+    and return keywords + SQL ingestion plan + (optionally) generated SQL.
 
     Raises ValueError if the OPENROUTER_API_KEY is not configured.
     """
@@ -399,12 +615,16 @@ async def analyze_policy_document(
         "pdf_text": pdf_text,
         "model_extract": model_extract or None,
         "model_plan": model_plan or None,
+        "model_sql": model_sql or None,
         "keywords": None,
         "sql_plan": None,
+        "sql_result": None,
         "extract_tokens": None,
         "plan_tokens": None,
+        "sql_tokens": None,
         "extract_duration_ms": None,
         "plan_duration_ms": None,
+        "sql_duration_ms": None,
         "error": None,
     }
 
@@ -419,8 +639,10 @@ async def analyze_policy_document(
 
     kw = final_state["keywords"]
     plan = final_state["sql_plan"]
+    sql = final_state.get("sql_result")
     et = final_state.get("extract_tokens") or {}
     pt = final_state.get("plan_tokens") or {}
+    st = final_state.get("sql_tokens") or {}
     token_usage = TokenUsage(
         extract_prompt=et.get("prompt", 0),
         extract_completion=et.get("completion", 0),
@@ -430,12 +652,18 @@ async def analyze_policy_document(
         plan_completion=pt.get("completion", 0),
         plan_total=pt.get("total", 0),
         plan_duration_ms=final_state.get("plan_duration_ms") or 0,
+        sql_prompt=st.get("prompt", 0),
+        sql_completion=st.get("completion", 0),
+        sql_total=st.get("total", 0),
+        sql_duration_ms=final_state.get("sql_duration_ms") or 0,
     )
     return PolicyAnalysisResponse(
         filename=filename,
         keywords=kw,
         sql_plan=plan,
+        sql_result=sql,
         formatted_keywords=_format_keywords(kw) if kw else "",
         formatted_plan=_format_plan(plan) if plan else "",
+        formatted_sql=sql.sql_query if sql else "",
         token_usage=token_usage,
     )

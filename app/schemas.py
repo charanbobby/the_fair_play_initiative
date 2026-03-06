@@ -489,6 +489,48 @@ class SQLQueryPlan(BaseModel):
     )
 
 
+# ---------------------------------------------------------------------------
+# SQL Generation (step 3 — plan → executable INSERT statements)
+# ---------------------------------------------------------------------------
+
+class SQLGeneration(BaseModel):
+    sql_query: str = Field(
+        description="Complete SQL block containing all INSERT statements. "
+                    "No markdown fences, no commentary — raw executable SQL only."
+    )
+    tables_affected: list[str] = Field(
+        default_factory=list,
+        description="Ordered list of table names that receive INSERTs "
+                    "(e.g. ['organization', 'region', 'organization_region', 'policy', 'rule'])."
+    )
+    statement_count: int = Field(
+        default=0,
+        description="Total number of INSERT statements in sql_query."
+    )
+    rule_count: int = Field(
+        default=0,
+        description="Number of rule INSERT statements specifically (subset of statement_count)."
+    )
+    id_chain: list[str] = Field(
+        default_factory=list,
+        description="Slug IDs used across statements for FK tracing, formatted as "
+                    "'table:slug' pairs (e.g. ['organization:acme-mfg', 'policy:hr-att-2024-001'])."
+    )
+    confidence_score: float = Field(
+        default=0.0,
+        description="Confidence in the generated SQL, 0.0–1.0. "
+                    "Deduct for placeholders, inferred values, or ambiguous plan instructions."
+    )
+
+
+class QueryResults(BaseModel):
+    """Row counts per config table after SQL execution."""
+    row_counts: dict[str, int] = Field(default_factory=dict)
+    total_rows: int = 0
+    execution_duration_ms: int = 0
+    error: str | None = None
+
+
 class TokenUsage(BaseModel):
     extract_prompt: int = 0
     extract_completion: int = 0
@@ -498,6 +540,10 @@ class TokenUsage(BaseModel):
     plan_completion: int = 0
     plan_total: int = 0
     plan_duration_ms: int = 0
+    sql_prompt: int = 0
+    sql_completion: int = 0
+    sql_total: int = 0
+    sql_duration_ms: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -544,6 +590,9 @@ class PolicyAnalysisResponse(BaseModel):
     filename: str
     keywords: KeywordExtraction
     sql_plan: SQLQueryPlan
+    sql_result: SQLGeneration | None = Field(default=None, description="Generated SQL INSERT statements (step 3).")
+    query_results: QueryResults | None = Field(default=None, description="Execution results (row counts per table).")
     formatted_keywords: str = Field(default="", description="Plain-text formatted keywords (matches notebook output).")
     formatted_plan: str = Field(default="", description="Plain-text formatted plan (matches notebook output).")
+    formatted_sql: str = Field(default="", description="Raw SQL from generation step.")
     token_usage: TokenUsage | None = Field(default=None, description="Token usage per pipeline step.")
