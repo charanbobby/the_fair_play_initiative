@@ -79,15 +79,17 @@ def delete_policy(policy_id: str, db: Session = Depends(get_db)):
 @router.post("/analyze", response_model=PolicyAnalysisResponse, tags=["policies"])
 async def analyze_policy(
     file: UploadFile = File(...),
-    model: Optional[str] = None,
+    model_extract: Optional[str] = None,
+    model_plan: Optional[str] = None,
 ):
     """
     Upload a policy document (PDF, DOCX, or TXT) and receive:
       - Extracted keywords mapped to the FPI schema entities
       - A structured SQL ingestion plan (no database writes performed)
 
-    Optional query parameter `model` overrides the default LLM model
-    (e.g. "anthropic/claude-sonnet-4", "openai/gpt-4o").
+    Optional query parameters override the default LLM model per step:
+      - model_extract: model for keyword extraction
+      - model_plan: model for SQL ingestion planning
     """
     allowed = {".pdf", ".docx", ".doc", ".txt"}
     from pathlib import Path
@@ -104,7 +106,11 @@ async def analyze_policy(
 
     try:
         from app.services.policy_analyzer import analyze_policy_document
-        return await analyze_policy_document(file.filename, content, model_override=model)
+        return await analyze_policy_document(
+            file.filename, content,
+            model_extract=model_extract,
+            model_plan=model_plan,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
     except Exception as exc:

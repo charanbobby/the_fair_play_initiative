@@ -61,7 +61,8 @@ def _build_model(model_override: str | None = None) -> ChatOpenAI:
 
 class FPIState(TypedDict):
     pdf_text: str
-    model_override: str | None
+    model_extract: str | None
+    model_plan: str | None
     keywords: KeywordExtraction | None
     sql_plan: SQLQueryPlan | None
     error: str | None
@@ -73,7 +74,7 @@ class FPIState(TypedDict):
 
 def node_extract(state: FPIState) -> dict:
     """Categorise policy keywords into schema-mapped groups."""
-    model = _build_model(state.get("model_override")).with_structured_output(KeywordExtraction)
+    model = _build_model(state.get("model_extract")).with_structured_output(KeywordExtraction)
     result = model.invoke([
         SystemMessage(content=_KEYWORD_SYSTEM_MSG),
         HumanMessage(content=state["pdf_text"]),
@@ -101,7 +102,7 @@ def node_plan(state: FPIState) -> dict:
     if not state.get("keywords"):
         return {"error": "node_plan: no keywords in state"}
 
-    model = _build_model(state.get("model_override")).with_structured_output(SQLQueryPlan)
+    model = _build_model(state.get("model_plan")).with_structured_output(SQLQueryPlan)
     human_msg = (
         "Devise an ingestion plan for the following keywords extracted from the "
         "attendance policy document. The plan must describe how to INSERT this "
@@ -255,7 +256,8 @@ def _format_plan(plan: SQLQueryPlan) -> str:
 async def analyze_policy_document(
     filename: str,
     content: bytes,
-    model_override: str | None = None,
+    model_extract: str | None = None,
+    model_plan: str | None = None,
 ) -> PolicyAnalysisResponse:
     """
     Extract text from the uploaded file, run the LangGraph pipeline,
@@ -274,7 +276,8 @@ async def analyze_policy_document(
 
     initial_state: FPIState = {
         "pdf_text": pdf_text,
-        "model_override": model_override or None,
+        "model_extract": model_extract or None,
+        "model_plan": model_plan or None,
         "keywords": None,
         "sql_plan": None,
         "error": None,

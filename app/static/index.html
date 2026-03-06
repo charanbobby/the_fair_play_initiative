@@ -113,7 +113,7 @@
               <h1 class="text-xl font-bold">The Fair Play Initiative</h1>
               <p class="text-xs text-slate-400">
                 Balanced Attendance Management
-                <span class="ml-2 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.5.8</span>
+                <span class="ml-2 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.5.9</span>
               </p>
             </div>
           </div>
@@ -370,50 +370,29 @@
             <!-- Populated by JS -->
           </div>
 
-          <!-- Model Selector -->
-          <div class="mb-4 flex items-center gap-3">
-            <label for="llm-model-select" class="text-sm font-medium text-slate-600 whitespace-nowrap">
-              <i data-lucide="cpu" class="w-4 h-4 inline -mt-0.5"></i>
-              LLM Model
-            </label>
-            <select
-              id="llm-model-select"
-              class="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white flex-1 max-w-md"
-            >
-              <option value="">Default (server setting)</option>
-              <optgroup label="OpenAI">
-                <option value="openai/gpt-5.4-pro">GPT-5.4 Pro (1M ctx)</option>
-                <option value="openai/gpt-5.4">GPT-5.4 (1M ctx)</option>
-                <option value="openai/gpt-5.2-pro">GPT-5.2 Pro (400K ctx)</option>
-                <option value="openai/gpt-5.2">GPT-5.2 (400K ctx)</option>
-                <option value="openai/gpt-4o-mini">GPT-4o Mini</option>
-                <option value="openai/gpt-4o">GPT-4o</option>
-              </optgroup>
-              <optgroup label="Anthropic">
-                <option value="anthropic/claude-opus-4.6">Claude Opus 4.6 (1M ctx)</option>
-                <option value="anthropic/claude-sonnet-4.6">Claude Sonnet 4.6 (1M ctx)</option>
-                <option value="anthropic/claude-opus-4.5">Claude Opus 4.5 (200K ctx)</option>
-              </optgroup>
-              <optgroup label="Google">
-                <option value="google/gemini-3.1-pro-preview">Gemini 3.1 Pro (1M ctx)</option>
-                <option value="google/gemini-3-flash-preview">Gemini 3 Flash (1M ctx)</option>
-                <option value="google/gemini-3.1-flash-lite-preview">Gemini 3.1 Flash Lite (1M ctx)</option>
-              </optgroup>
-              <optgroup label="DeepSeek">
-                <option value="deepseek/deepseek-v3.2">DeepSeek V3.2 (164K ctx)</option>
-                <option value="deepseek/deepseek-v3.2-speciale">DeepSeek V3.2 Speciale (164K ctx)</option>
-                <option value="deepseek/deepseek-r1">DeepSeek R1</option>
-              </optgroup>
-              <optgroup label="Mistral">
-                <option value="mistralai/mistral-large-2512">Mistral Large 3 (262K ctx)</option>
-                <option value="mistralai/devstral-2512">Devstral 2 (262K ctx)</option>
-              </optgroup>
-              <optgroup label="Qwen">
-                <option value="qwen/qwen3.5-plus-02-15">Qwen 3.5 Plus (1M ctx)</option>
-                <option value="qwen/qwen3.5-397b-a17b">Qwen 3.5 397B (262K ctx)</option>
-                <option value="qwen/qwen3.5-flash">Qwen 3.5 Flash (1M ctx)</option>
-              </optgroup>
-            </select>
+          <!-- Per-Step Model Selectors -->
+          <div class="mb-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <label for="llm-model-extract" class="block text-xs font-medium text-slate-500 mb-1">
+                <i data-lucide="scan-search" class="w-3.5 h-3.5 inline -mt-0.5"></i>
+                Extraction Model
+              </label>
+              <select id="llm-model-extract" class="llm-model-select border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white w-full"></select>
+            </div>
+            <div>
+              <label for="llm-model-plan" class="block text-xs font-medium text-slate-500 mb-1">
+                <i data-lucide="list-tree" class="w-3.5 h-3.5 inline -mt-0.5"></i>
+                Planning Model
+              </label>
+              <select id="llm-model-plan" class="llm-model-select border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white w-full"></select>
+            </div>
+            <div class="relative" title="Coming soon — SQL generation node not yet wired">
+              <label for="llm-model-sql" class="block text-xs font-medium text-slate-400 mb-1">
+                <i data-lucide="database" class="w-3.5 h-3.5 inline -mt-0.5"></i>
+                SQL Generation Model
+              </label>
+              <select id="llm-model-sql" class="llm-model-select border border-slate-200 rounded-lg px-3 py-2 text-sm bg-slate-100 w-full text-slate-400 cursor-not-allowed" disabled></select>
+            </div>
           </div>
 
           <!-- Upload Zone -->
@@ -1289,8 +1268,51 @@
         },
       ];
 
+      // ── LLM model options (shared across all 3 dropdowns) ──────────
+      const _LLM_MODEL_OPTIONS = `
+        <option value="">Default (server setting)</option>
+        <optgroup label="OpenAI">
+          <option value="openai/gpt-5.4-pro">GPT-5.4 Pro (1M ctx)</option>
+          <option value="openai/gpt-5.4">GPT-5.4 (1M ctx)</option>
+          <option value="openai/gpt-5.2-pro">GPT-5.2 Pro (400K ctx)</option>
+          <option value="openai/gpt-5.2">GPT-5.2 (400K ctx)</option>
+          <option value="openai/gpt-4o-mini">GPT-4o Mini</option>
+          <option value="openai/gpt-4o">GPT-4o</option>
+        </optgroup>
+        <optgroup label="Anthropic">
+          <option value="anthropic/claude-opus-4.6">Claude Opus 4.6 (1M ctx)</option>
+          <option value="anthropic/claude-sonnet-4.6">Claude Sonnet 4.6 (1M ctx)</option>
+          <option value="anthropic/claude-opus-4.5">Claude Opus 4.5 (200K ctx)</option>
+        </optgroup>
+        <optgroup label="Google">
+          <option value="google/gemini-3.1-pro-preview">Gemini 3.1 Pro (1M ctx)</option>
+          <option value="google/gemini-3-flash-preview">Gemini 3 Flash (1M ctx)</option>
+          <option value="google/gemini-3.1-flash-lite-preview">Gemini 3.1 Flash Lite (1M ctx)</option>
+        </optgroup>
+        <optgroup label="DeepSeek">
+          <option value="deepseek/deepseek-v3.2">DeepSeek V3.2 (164K ctx)</option>
+          <option value="deepseek/deepseek-v3.2-speciale">DeepSeek V3.2 Speciale (164K ctx)</option>
+          <option value="deepseek/deepseek-r1">DeepSeek R1</option>
+        </optgroup>
+        <optgroup label="Mistral">
+          <option value="mistralai/mistral-large-2512">Mistral Large 3 (262K ctx)</option>
+          <option value="mistralai/devstral-2512">Devstral 2 (262K ctx)</option>
+        </optgroup>
+        <optgroup label="Qwen">
+          <option value="qwen/qwen3.5-plus-02-15">Qwen 3.5 Plus (1M ctx)</option>
+          <option value="qwen/qwen3.5-397b-a17b">Qwen 3.5 397B (262K ctx)</option>
+          <option value="qwen/qwen3.5-flash">Qwen 3.5 Flash (1M ctx)</option>
+        </optgroup>`;
+
+      function populateModelSelectors() {
+        document.querySelectorAll(".llm-model-select").forEach(sel => {
+          sel.innerHTML = _LLM_MODEL_OPTIONS;
+        });
+      }
+
       // Initialize
       document.addEventListener("DOMContentLoaded", async () => {
+        populateModelSelectors();
         await loadDataFromAPI();
         setupDragAndDrop();
         populateOrganizationFilter();
@@ -2106,10 +2128,13 @@
           const formData = new FormData();
           formData.append("file", file);
 
-          const selectedModel = document.getElementById("llm-model-select")?.value || "";
-          const analyzeUrl = selectedModel
-            ? `/api/v1/policies/analyze?model=${encodeURIComponent(selectedModel)}`
-            : "/api/v1/policies/analyze";
+          const extractModel = document.getElementById("llm-model-extract")?.value || "";
+          const planModel = document.getElementById("llm-model-plan")?.value || "";
+          const params = new URLSearchParams();
+          if (extractModel) params.set("model_extract", extractModel);
+          if (planModel) params.set("model_plan", planModel);
+          const qs = params.toString();
+          const analyzeUrl = `/api/v1/policies/analyze${qs ? "?" + qs : ""}`;
 
           const response = await fetch(analyzeUrl, {
             method: "POST",
