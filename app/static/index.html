@@ -136,7 +136,7 @@
               <h1 class="text-xl font-bold">The Fair Play Initiative</h1>
               <p class="text-xs text-slate-400">
                 Balanced Attendance Management
-                <span class="ml-2 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.9.9</span>
+                <span class="ml-2 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.10.0</span>
                 <span id="playground-badge" class="ml-1 bg-amber-500 text-amber-50 text-xs font-mono px-1.5 py-0.5 rounded hidden">Playground</span>
               </p>
             </div>
@@ -541,6 +541,10 @@
                 <i data-lucide="hash" class="w-3.5 h-3.5"></i>
                 Extraction: <span id="tokens-extract" class="font-mono font-semibold">—</span> tokens
               </div>
+              <div id="tokens-reconcile-wrapper" class="hidden flex items-center gap-1.5 bg-amber-50 text-amber-700 px-3 py-1.5 rounded-lg">
+                <i data-lucide="hash" class="w-3.5 h-3.5"></i>
+                Reconcile: <span id="tokens-reconcile" class="font-mono font-semibold">—</span> tokens
+              </div>
               <div class="flex items-center gap-1.5 bg-violet-50 text-violet-700 px-3 py-1.5 rounded-lg">
                 <i data-lucide="hash" class="w-3.5 h-3.5"></i>
                 Planning: <span id="tokens-plan" class="font-mono font-semibold">—</span> tokens
@@ -569,6 +573,21 @@
                 </summary>
                 <div class="collapsible-body px-4 py-3">
                   <div id="keywords-section" class="space-y-3">
+                    <!-- Populated by JS -->
+                  </div>
+                </div>
+              </details>
+
+              <!-- Entity Reconciliation (collapsible, hidden until populated) -->
+              <details id="reconcile-details" class="collapsible-section mb-4 border border-slate-200 rounded-lg overflow-hidden hidden">
+                <summary class="flex items-center justify-between px-4 py-2.5 bg-slate-50 cursor-pointer hover:bg-slate-100 transition select-none">
+                  <h5 class="text-sm font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-2">
+                    <span class="collapse-arrow">&#9654;</span>
+                    Entity Reconciliation
+                  </h5>
+                </summary>
+                <div class="collapsible-body px-4 py-3">
+                  <div id="reconcile-section" class="space-y-3">
                     <!-- Populated by JS -->
                   </div>
                 </div>
@@ -2457,6 +2476,7 @@
 
       const STEP_LABELS = {
         extract: "Extracting keywords from policy document...",
+        reconcile: "Reconciling entities with existing database...",
         plan: "Building SQL ingestion plan...",
         sql: "Generating SQL statements...",
       };
@@ -2502,6 +2522,7 @@
       let _streamedAnalysisData = {
         filename: null,
         keywords: null,
+        reconciliation: null,
         sql_plan: null,
         sql_result: null,
         formatted_keywords: "",
@@ -2523,6 +2544,14 @@
             Object.assign(_streamedAnalysisData.token_usage, evt.data.token_usage);
             renderKeywordsOnly(evt.data.keywords);
             renderTokenBadge(evt.data.token_usage, "extract");
+            break;
+
+          case "reconcile":
+            hideStepProgress();
+            _streamedAnalysisData.reconciliation = evt.data.reconciliation;
+            Object.assign(_streamedAnalysisData.token_usage, evt.data.token_usage);
+            renderReconcileOnly(evt.data.reconciliation);
+            renderTokenBadge(evt.data.token_usage, "reconcile");
             break;
 
           case "plan":
@@ -2826,11 +2855,105 @@
           document.getElementById("tokens-plan").textContent =
             (tokenData.plan_total || 0).toLocaleString();
         }
+        if (step === "reconcile" && tokenData.reconcile_total !== undefined && tokenData.reconcile_total > 0) {
+          document.getElementById("tokens-reconcile").textContent =
+            (tokenData.reconcile_total || 0).toLocaleString();
+          document.getElementById("tokens-reconcile-wrapper").classList.remove("hidden");
+        }
         if (step === "sql" && tokenData.sql_total !== undefined && tokenData.sql_total > 0) {
           document.getElementById("tokens-sql").textContent =
             (tokenData.sql_total || 0).toLocaleString();
           document.getElementById("tokens-sql-wrapper").classList.remove("hidden");
         }
+      }
+
+      function renderReconcileOnly(recon) {
+        if (!recon) return;
+        const container = document.getElementById("reconcile-section");
+        const details = document.getElementById("reconcile-details");
+
+        // Pass-through (empty DB) — hide section entirely
+        if (recon.is_pass_through) {
+          details.classList.add("hidden");
+          return;
+        }
+
+        details.classList.remove("hidden");
+        details.open = true;
+
+        const SEVERITY_STYLES = {
+          error:   "bg-red-50 border-red-200 text-red-800",
+          warning: "bg-amber-50 border-amber-200 text-amber-800",
+          info:    "bg-blue-50 border-blue-200 text-blue-800",
+        };
+        const SEVERITY_ICONS = {
+          error:   '<svg class="w-4 h-4 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
+          warning: '<svg class="w-4 h-4 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
+          info:    '<svg class="w-4 h-4 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
+        };
+
+        let html = "";
+
+        // Entity matches
+        const allMatches = [
+          ...(recon.matches?.organization_matches || []),
+          ...(recon.matches?.region_matches || []),
+          ...(recon.matches?.policy_matches || []),
+        ];
+        if (allMatches.length > 0) {
+          html += `<div class="mb-3"><h6 class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Matched Entities</h6>`;
+          html += `<div class="space-y-1.5">`;
+          for (const m of allMatches) {
+            const confPct = Math.round(m.confidence * 100);
+            const confColor = confPct >= 90 ? "text-emerald-600" : confPct >= 70 ? "text-amber-600" : "text-red-600";
+            html += `<div class="flex items-center gap-2 text-sm bg-white border border-slate-100 rounded px-3 py-1.5">
+              <span class="px-1.5 py-0.5 rounded text-xs font-mono bg-slate-100 text-slate-600">${_esc(m.entity_type)}</span>
+              <span class="text-slate-700">"${_esc(m.extracted_name)}"</span>
+              <span class="text-slate-400">&rarr;</span>
+              <span class="font-medium text-slate-800">${_esc(m.matched_name)}</span>
+              <span class="font-mono text-xs text-slate-400">(${_esc(m.matched_id)})</span>
+              <span class="ml-auto font-mono text-xs ${confColor}">${confPct}%</span>
+            </div>`;
+          }
+          html += `</div></div>`;
+        }
+
+        // New entities
+        const newEntities = recon.matches?.no_match_entities || [];
+        if (newEntities.length > 0) {
+          html += `<div class="mb-3"><h6 class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">New Entities (no existing match)</h6>`;
+          html += `<div class="flex flex-wrap gap-1.5">`;
+          for (const e of newEntities) {
+            html += `<span class="px-2 py-1 rounded text-xs bg-emerald-50 text-emerald-700 border border-emerald-200">${_esc(e)}</span>`;
+          }
+          html += `</div></div>`;
+        }
+
+        // Conflicts
+        const conflicts = recon.conflicts || [];
+        if (conflicts.length > 0) {
+          html += `<div><h6 class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Conflicts Detected</h6>`;
+          html += `<div class="space-y-2">`;
+          for (const c of conflicts) {
+            const style = SEVERITY_STYLES[c.severity] || SEVERITY_STYLES.info;
+            const icon = SEVERITY_ICONS[c.severity] || SEVERITY_ICONS.info;
+            html += `<div class="flex items-start gap-2 border rounded-lg px-3 py-2 text-sm ${style}">
+              ${icon}
+              <div>
+                <span class="font-medium">${_esc(c.conflict_type)}</span>: ${_esc(c.message)}
+                <div class="text-xs mt-0.5 opacity-75">Suggested: ${_esc(c.suggested_action)}</div>
+              </div>
+            </div>`;
+          }
+          html += `</div></div>`;
+        }
+
+        // Empty state (no matches, no conflicts, no new)
+        if (allMatches.length === 0 && newEntities.length === 0 && conflicts.length === 0) {
+          html = `<p class="text-sm text-slate-500">No entity matches or conflicts detected.</p>`;
+        }
+
+        container.innerHTML = html;
       }
 
       function renderKeywordsOnly(kw) {

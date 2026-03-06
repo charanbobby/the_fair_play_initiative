@@ -107,7 +107,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Apprentice — Fair Play Initiative API",
     description="FastAPI backend for Apprentice: verifiable agentic workflows. First domain: Fair Play Initiative (workforce attendance compliance).",
-    version="0.9.9",
+    version="0.10.0",
     lifespan=lifespan,
     redirect_slashes=False,
 )

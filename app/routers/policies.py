@@ -137,12 +137,19 @@ async def analyze_policy(
         )
 
     try:
-        from app.services.policy_analyzer import analyze_policy_document, execute_sql_against_db
+        from app.services.policy_analyzer import (
+            analyze_policy_document, execute_sql_against_db, fetch_existing_records,
+        )
+
+        # Pre-query existing records for entity reconciliation
+        existing_records = fetch_existing_records(db)
+
         result = await analyze_policy_document(
             filename, content,
             model_extract=model_extract,
             model_plan=model_plan,
             model_sql=model_sql,
+            existing_records=existing_records,
         )
 
         # ── Execute SQL if requested (playground only) ────────────────
@@ -170,6 +177,16 @@ async def analyze_policy(
                     total_tokens=usage.extract_total,
                     duration_ms=usage.extract_duration_ms,
                 ))
+                if usage.reconcile_total > 0:
+                    analytics_db.add(models.AnalysisLog(
+                        filename=filename,
+                        step="reconcile",
+                        llm_model=default_model,
+                        prompt_tokens=usage.reconcile_prompt,
+                        completion_tokens=usage.reconcile_completion,
+                        total_tokens=usage.reconcile_total,
+                        duration_ms=usage.reconcile_duration_ms,
+                    ))
                 analytics_db.add(models.AnalysisLog(
                     filename=filename,
                     step="plan",
@@ -229,7 +246,7 @@ async def analyze_policy_stream(
     """
     from pathlib import Path
     from app.config import settings
-    from app.services.policy_analyzer import stream_policy_analysis
+    from app.services.policy_analyzer import stream_policy_analysis, fetch_existing_records
 
     if file and file.filename:
         allowed = {".pdf", ".docx", ".doc", ".txt"}
@@ -252,12 +269,16 @@ async def analyze_policy_stream(
             detail="Provide either a file upload or paste policy text.",
         )
 
+    # Pre-query existing records for entity reconciliation
+    existing_records = fetch_existing_records(db)
+
     async def event_generator():
         async for event in stream_policy_analysis(
             filename, content,
             model_extract=model_extract,
             model_plan=model_plan,
             model_sql=model_sql,
+            existing_records=existing_records,
             db=db,
             analytics_db=analytics_db,
             default_model=settings.LLM_MODEL,

@@ -523,6 +523,100 @@ class SQLGeneration(BaseModel):
     )
 
 
+# ---------------------------------------------------------------------------
+# Entity Reconciliation (step 1b — match extracted entities against existing DB)
+# ---------------------------------------------------------------------------
+
+class EntityMatch(BaseModel):
+    """An LLM-determined match between an extracted entity and an existing DB row."""
+    entity_type: str = Field(
+        description="One of: 'organization', 'region', 'policy'."
+    )
+    extracted_name: str = Field(
+        description="The name extracted from the policy document."
+    )
+    matched_id: str = Field(
+        description="The existing DB record's primary key (id)."
+    )
+    matched_name: str = Field(
+        description="The existing DB record's name field."
+    )
+    confidence: float = Field(
+        default=0.0,
+        description="Match confidence, 0.0–1.0."
+    )
+    reasoning: str = Field(
+        default="",
+        description="Brief explanation of why this match was made."
+    )
+
+
+class ConflictWarning(BaseModel):
+    """A data conflict detected during reconciliation."""
+    severity: str = Field(
+        description="One of: 'error', 'warning', 'info'."
+    )
+    conflict_type: str = Field(
+        description="E.g. 'duplicate_policy', 'date_overlap', 'active_overwrite'."
+    )
+    message: str = Field(
+        description="Human-readable description of the conflict."
+    )
+    existing_record: dict = Field(
+        default_factory=dict,
+        description="The existing DB record involved in the conflict."
+    )
+    suggested_action: str = Field(
+        default="review",
+        description="One of: 'use_existing', 'overwrite', 'review', 'skip'."
+    )
+
+
+class ReconciliationResult(BaseModel):
+    """LLM structured output: entity matches against existing DB records."""
+    organization_matches: list[EntityMatch] = Field(
+        default_factory=list,
+        description="Matches between extracted org names and existing DB organizations."
+    )
+    region_matches: list[EntityMatch] = Field(
+        default_factory=list,
+        description="Matches between extracted region names and existing DB regions."
+    )
+    policy_matches: list[EntityMatch] = Field(
+        default_factory=list,
+        description="Matches between extracted policy names and existing DB policies."
+    )
+    no_match_entities: list[str] = Field(
+        default_factory=list,
+        description="Extracted entities with no DB match (truly new), as 'type:name' strings."
+    )
+    confidence_score: float = Field(
+        default=0.0,
+        description="Overall reconciliation confidence, 0.0–1.0."
+    )
+
+
+class Reconciliation(BaseModel):
+    """Full reconciliation output: LLM entity matches + deterministic conflict checks."""
+    matches: ReconciliationResult = Field(
+        default_factory=ReconciliationResult,
+        description="LLM-determined entity matches."
+    )
+    conflicts: list[ConflictWarning] = Field(
+        default_factory=list,
+        description="Deterministically-detected conflicts (date overlaps, duplicates)."
+    )
+    existing_ids: dict[str, str] = Field(
+        default_factory=dict,
+        description="Map of 'entity_type:extracted_name' -> existing DB id. "
+                    "Used by downstream nodes to reuse existing IDs instead of generating new slugs."
+    )
+    is_pass_through: bool = Field(
+        default=False,
+        description="True if DB was empty and reconciliation was skipped (no LLM call)."
+    )
+
+
 class ExecuteSQLRequest(BaseModel):
     """Request body for the decoupled SQL execution endpoint."""
     sql_query: str = Field(description="The SQL to execute.")
@@ -542,6 +636,10 @@ class TokenUsage(BaseModel):
     extract_completion: int = 0
     extract_total: int = 0
     extract_duration_ms: int = 0
+    reconcile_prompt: int = 0
+    reconcile_completion: int = 0
+    reconcile_total: int = 0
+    reconcile_duration_ms: int = 0
     plan_prompt: int = 0
     plan_completion: int = 0
     plan_total: int = 0
@@ -595,6 +693,7 @@ class PlaygroundStatus(BaseModel):
 class PolicyAnalysisResponse(BaseModel):
     filename: str
     keywords: KeywordExtraction
+    reconciliation: Reconciliation | None = Field(default=None, description="Entity reconciliation: matched IDs and conflict warnings.")
     sql_plan: SQLQueryPlan
     sql_result: SQLGeneration | None = Field(default=None, description="Generated SQL INSERT statements (step 3).")
     query_results: QueryResults | None = Field(default=None, description="Execution results (row counts per table).")

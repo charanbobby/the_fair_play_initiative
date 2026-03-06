@@ -1,15 +1,16 @@
 """
 app/services/policy_analyzer.py
 ---------------------------------
-LangGraph pipeline: PDF/DOCX/TXT → keyword extraction → SQL ingestion plan
-                    → (optional) SQL generation.
+LangGraph pipeline: PDF/DOCX/TXT → keyword extraction → entity reconciliation
+                    → SQL ingestion plan → (optional) SQL generation.
 
 Nodes:
     node_extract      — LLM extracts schema-mapped keywords from policy text
+    node_reconcile    — LLM matches extracted entities against existing DB records
     node_plan         — LLM devises a structured INSERT plan from keywords
     node_generate_sql — LLM generates executable INSERT statements from the plan
 
-Graph:  START → node_extract → node_plan → [node_generate_sql]? → END
+Graph:  START → node_extract → node_reconcile → node_plan → [node_generate_sql]? → END
 
 SQL execution happens outside the graph (in the endpoint) using the FastAPI
 db session — see ``execute_sql_against_db()``.
@@ -30,9 +31,12 @@ from langgraph.graph import END, START, StateGraph
 
 from app.config import settings
 from app.schemas import (
+    ConflictWarning,
     KeywordExtraction,
     PolicyAnalysisResponse,
     QueryResults,
+    Reconciliation,
+    ReconciliationResult,
     SQLGeneration,
     SQLQueryPlan,
     TokenUsage,
@@ -58,6 +62,8 @@ _PLAN_SYSTEM_MSG: str = _PLAN_SYSTEM_TEMPLATE.replace("{{schema}}", _SCHEMA_JSON
 _SQL_GEN_SYSTEM_TEMPLATE: str = (_PROMPTS_DIR / "03_sql_generation.md").read_text(encoding="utf-8")
 _SQL_GEN_SYSTEM_MSG: str = _SQL_GEN_SYSTEM_TEMPLATE.replace("{{schema}}", _SCHEMA_JSON)
 
+_RECONCILE_SYSTEM_MSG: str = (_PROMPTS_DIR / "01b_reconciliation.md").read_text(encoding="utf-8")
+
 # ---------------------------------------------------------------------------
 # LLM — ChatOpenAI pointed at OpenRouter
 # ---------------------------------------------------------------------------
@@ -82,13 +88,22 @@ class FPIState(TypedDict):
     model_extract: str | None
     model_plan: str | None
     model_sql: str | None
+    model_reconcile: str | None
     keywords: KeywordExtraction | None
     sql_plan: SQLQueryPlan | None
     sql_result: SQLGeneration | None
+    # Pre-queried existing DB records (serializable dicts, not ORM objects)
+    existing_organizations: list[dict] | None
+    existing_regions: list[dict] | None
+    existing_policies: list[dict] | None
+    # Reconciliation output
+    reconciliation: Reconciliation | None
     extract_tokens: dict | None
+    reconcile_tokens: dict | None
     plan_tokens: dict | None
     sql_tokens: dict | None
     extract_duration_ms: int | None
+    reconcile_duration_ms: int | None
     plan_duration_ms: int | None
     sql_duration_ms: int | None
     error: str | None
@@ -129,6 +144,230 @@ def node_extract(state: FPIState) -> dict:
     return {"keywords": result, "extract_tokens": tokens, "extract_duration_ms": duration_ms}
 
 
+# ---------------------------------------------------------------------------
+# Reconciliation helpers
+# ---------------------------------------------------------------------------
+
+def _build_reconciliation_human_msg(
+    keywords: KeywordExtraction,
+    existing_orgs: list[dict],
+    existing_regions: list[dict],
+    existing_policies: list[dict],
+) -> str:
+    """Build the human message for the reconciliation LLM call."""
+    lines = ["Match the extracted entities below against the existing database records.\n"]
+
+    lines.append("## Extracted Entities (from policy document)\n")
+    if keywords.organization:
+        lines.append(f"Organizations: {', '.join(keywords.organization)}")
+    if keywords.region:
+        lines.append(f"Regions: {', '.join(keywords.region)}")
+    if keywords.policy:
+        lines.append(f"Policies: {', '.join(keywords.policy)}")
+
+    lines.append("\n## Existing Database Records\n")
+
+    if existing_orgs:
+        lines.append("### Organizations")
+        for org in existing_orgs:
+            lines.append(f"  - id: {org['id']}, name: {org['name']}, code: {org.get('code', '')}")
+    else:
+        lines.append("### Organizations\n  (none)")
+
+    if existing_regions:
+        lines.append("### Regions")
+        for r in existing_regions:
+            lines.append(f"  - id: {r['id']}, name: {r['name']}, code: {r.get('code', '')}")
+    else:
+        lines.append("### Regions\n  (none)")
+
+    if existing_policies:
+        lines.append("### Policies")
+        for p in existing_policies:
+            lines.append(
+                f"  - id: {p['id']}, name: {p['name']}, "
+                f"org_id: {p['organization_id']}, "
+                f"effective_date: {p.get('effective_date') or 'N/A'}"
+            )
+    else:
+        lines.append("### Policies\n  (none)")
+
+    return "\n".join(lines)
+
+
+def _detect_conflicts(
+    keywords: KeywordExtraction,
+    matches: ReconciliationResult,
+    existing_orgs: list[dict],
+    existing_regions: list[dict],
+    existing_policies: list[dict],
+) -> list[ConflictWarning]:
+    """Deterministic conflict detection: date overlaps, active-policy overwrites."""
+    conflicts: list[ConflictWarning] = []
+
+    # 1. Matched active policy → overwrite warning
+    for pm in matches.policy_matches:
+        if pm.confidence < 0.7:
+            continue
+        matched = next((p for p in existing_policies if p["id"] == pm.matched_id), None)
+        if matched and matched.get("active", True):
+            conflicts.append(ConflictWarning(
+                severity="warning",
+                conflict_type="active_overwrite",
+                message=(
+                    f"Policy '{pm.extracted_name}' matches existing active policy "
+                    f"'{matched['name']}' (id: {matched['id']}). "
+                    f"Proceeding will update the existing record via INSERT OR REPLACE."
+                ),
+                existing_record=matched,
+                suggested_action="overwrite",
+            ))
+
+    # 2. Date overlap: new policy shares effective_date with another active
+    #    policy for the same org+region
+    for pm in matches.policy_matches:
+        if pm.confidence < 0.7:
+            continue
+        matched = next((p for p in existing_policies if p["id"] == pm.matched_id), None)
+        if not matched:
+            continue
+        org_id = matched.get("organization_id")
+        region_id = matched.get("region_id")
+        eff_date = matched.get("effective_date")
+        if not eff_date:
+            continue
+        siblings = [
+            p for p in existing_policies
+            if p["organization_id"] == org_id
+            and p.get("region_id") == region_id
+            and p["id"] != matched["id"]
+            and p.get("active", True)
+            and p.get("effective_date") == eff_date
+        ]
+        for sib in siblings:
+            conflicts.append(ConflictWarning(
+                severity="error",
+                conflict_type="date_overlap",
+                message=(
+                    f"Two active policies for org '{org_id}' in region '{region_id}' "
+                    f"share effective_date {eff_date}: "
+                    f"'{sib['name']}' and '{matched['name']}'."
+                ),
+                existing_record=sib,
+                suggested_action="review",
+            ))
+
+    return conflicts
+
+
+def _format_reconciliation_for_plan(recon: Reconciliation) -> str:
+    """Format reconciliation results as instructions for the plan node."""
+    lines = ["## Entity Reconciliation (MUST follow these ID assignments)\n"]
+    lines.append(
+        "The following entities already exist in the database. "
+        "You MUST use the existing IDs shown below instead of generating new slug IDs. "
+        "Use INSERT OR IGNORE for these existing records.\n"
+    )
+
+    if recon.existing_ids:
+        lines.append("### Existing IDs to reuse:")
+        for key, existing_id in recon.existing_ids.items():
+            entity_type, extracted_name = key.split(":", 1)
+            lines.append(f"  - {entity_type}: '{extracted_name}' -> use id = '{existing_id}'")
+        lines.append("")
+
+    if recon.matches.no_match_entities:
+        lines.append("### New entities (generate new slug IDs):")
+        for e in recon.matches.no_match_entities:
+            lines.append(f"  - {e}")
+        lines.append("")
+
+    if recon.conflicts:
+        lines.append("### Conflicts detected (include in operational_reminders):")
+        for c in recon.conflicts:
+            lines.append(f"  - [{c.severity.upper()}] {c.message}")
+        lines.append("")
+
+    return "\n".join(lines) + "\n\n"
+
+
+def node_reconcile(state: FPIState) -> dict:
+    """Match extracted entities against existing DB records using LLM semantic matching.
+
+    Fast pass-through if no existing records are present in the DB.
+    Deterministic conflict detection runs after LLM matching.
+    """
+    import time
+
+    keywords = state.get("keywords")
+    if not keywords:
+        return {"error": "node_reconcile: no keywords in state"}
+
+    existing_orgs = state.get("existing_organizations") or []
+    existing_regions = state.get("existing_regions") or []
+    existing_policies = state.get("existing_policies") or []
+
+    has_existing = bool(existing_orgs or existing_regions or existing_policies)
+
+    # Fast pass-through: empty DB, nothing to reconcile
+    if not has_existing:
+        return {
+            "reconciliation": Reconciliation(is_pass_through=True),
+            "reconcile_tokens": {"prompt": 0, "completion": 0, "total": 0},
+            "reconcile_duration_ms": 0,
+        }
+
+    t0 = time.perf_counter()
+
+    model = _build_model(state.get("model_reconcile")).with_structured_output(
+        ReconciliationResult, include_raw=True
+    )
+
+    human_msg = _build_reconciliation_human_msg(
+        keywords, existing_orgs, existing_regions, existing_policies
+    )
+
+    raw_result = model.invoke([
+        SystemMessage(content=_RECONCILE_SYSTEM_MSG),
+        HumanMessage(content=human_msg),
+    ])
+
+    duration_ms = int((time.perf_counter() - t0) * 1000)
+    matches_result: ReconciliationResult = raw_result["parsed"]
+    tokens = _extract_token_usage(raw_result.get("raw"))
+
+    # Build existing_ids lookup from high-confidence LLM matches
+    existing_ids: dict[str, str] = {}
+    for m in matches_result.organization_matches:
+        if m.confidence >= 0.7:
+            existing_ids[f"organization:{m.extracted_name}"] = m.matched_id
+    for m in matches_result.region_matches:
+        if m.confidence >= 0.7:
+            existing_ids[f"region:{m.extracted_name}"] = m.matched_id
+    for m in matches_result.policy_matches:
+        if m.confidence >= 0.7:
+            existing_ids[f"policy:{m.extracted_name}"] = m.matched_id
+
+    # Deterministic conflict detection
+    conflicts = _detect_conflicts(
+        keywords, matches_result,
+        existing_orgs, existing_regions, existing_policies,
+    )
+
+    reconciliation = Reconciliation(
+        matches=matches_result,
+        conflicts=conflicts,
+        existing_ids=existing_ids,
+        is_pass_through=False,
+    )
+
+    return {
+        "reconciliation": reconciliation,
+        "reconcile_tokens": tokens,
+        "reconcile_duration_ms": duration_ms,
+    }
+
+
 def _adjust_confidence(score: float, has_placeholders: bool) -> float:
     """Clamp LLM confidence to a realistic range.
     The input document is always truncated, so 1.0 is never valid.
@@ -150,11 +389,17 @@ def node_plan(state: FPIState) -> dict:
     model = _build_model(state.get("model_plan")).with_structured_output(
         SQLQueryPlan, include_raw=True
     )
+    recon = state.get("reconciliation")
+    recon_section = ""
+    if recon and not recon.is_pass_through:
+        recon_section = _format_reconciliation_for_plan(recon)
+
     human_msg = (
         "Devise an ingestion plan for the following keywords extracted from the "
         "attendance policy document. The plan must describe how to INSERT this "
         "policy's data into the FPI configuration tables. Do NOT write SQL.\n\n"
         f"## Extracted Keywords\n\n{_format_keywords(state['keywords'])}\n\n"
+        f"{recon_section}"
         f"## Policy Document (for context)\n\n{state['pdf_text']}"
     )
     raw_result = model.invoke([
@@ -192,12 +437,24 @@ def node_generate_sql(state: FPIState) -> dict:
     model = _build_model(state.get("model_sql")).with_structured_output(
         SQLGeneration, include_raw=True
     )
+    recon = state.get("reconciliation")
+    recon_ids_section = ""
+    if recon and not recon.is_pass_through and recon.existing_ids:
+        id_lines = "\n".join(
+            f"  - {k}: '{v}'" for k, v in recon.existing_ids.items()
+        )
+        recon_ids_section = (
+            "\n\n## Existing Entity IDs (use these exact IDs in FK references)\n\n"
+            f"{id_lines}\n"
+        )
+
     human_msg = (
         "Generate INSERT SQL implementing the ingestion plan below.\n\n"
         "## Approved Ingestion Plan\n\n"
         f"{_format_plan_for_sql_prompt(state['sql_plan'])}\n\n"
         "## Extracted Keywords (source values for INSERT literals)\n\n"
         f"{_format_keywords(state['keywords'])}"
+        f"{recon_ids_section}"
     )
     raw_result = model.invoke([
         SystemMessage(content=_SQL_GEN_SYSTEM_MSG),
@@ -233,10 +490,12 @@ def _route_after_plan(state: FPIState) -> str:
 def _build_graph() -> StateGraph:
     g = StateGraph(FPIState)
     g.add_node("node_extract", node_extract)
+    g.add_node("node_reconcile", node_reconcile)
     g.add_node("node_plan", node_plan)
     g.add_node("node_generate_sql", node_generate_sql)
     g.add_edge(START, "node_extract")
-    g.add_edge("node_extract", "node_plan")
+    g.add_edge("node_extract", "node_reconcile")
+    g.add_edge("node_reconcile", "node_plan")
     g.add_conditional_edges("node_plan", _route_after_plan)
     g.add_edge("node_generate_sql", END)
     return g.compile()
@@ -606,6 +865,59 @@ def _split_sql_statements(sql: str) -> list[str]:
     return stmts
 
 
+def fetch_existing_records(db) -> dict:
+    """Pre-query existing organizations, regions, and policies from the DB.
+
+    Returns serializable dicts (not ORM objects) suitable for passing into
+    FPIState.  Called from the endpoint, NOT from the graph.
+    """
+    from sqlalchemy import text
+
+    organizations: list[dict] = []
+    regions: list[dict] = []
+    policies: list[dict] = []
+
+    try:
+        rows = db.execute(text("SELECT id, name, code, active FROM organizations")).fetchall()
+        organizations = [
+            {"id": r[0], "name": r[1], "code": r[2], "active": r[3]}
+            for r in rows
+        ]
+    except Exception:
+        pass  # table may not exist yet
+
+    try:
+        rows = db.execute(text("SELECT id, name, code, timezone FROM regions")).fetchall()
+        regions = [
+            {"id": r[0], "name": r[1], "code": r[2], "timezone": r[3]}
+            for r in rows
+        ]
+    except Exception:
+        pass
+
+    try:
+        rows = db.execute(text(
+            "SELECT id, name, organization_id, region_id, active, effective_date "
+            "FROM policies"
+        )).fetchall()
+        policies = [
+            {
+                "id": r[0], "name": r[1], "organization_id": r[2],
+                "region_id": r[3], "active": r[4],
+                "effective_date": str(r[5]) if r[5] else None,
+            }
+            for r in rows
+        ]
+    except Exception:
+        pass
+
+    return {
+        "existing_organizations": organizations,
+        "existing_regions": regions,
+        "existing_policies": policies,
+    }
+
+
 def execute_sql_against_db(
     db,
     sql_result: SQLGeneration,
@@ -678,10 +990,12 @@ async def analyze_policy_document(
     model_extract: str | None = None,
     model_plan: str | None = None,
     model_sql: str | None = None,
+    model_reconcile: str | None = None,
+    existing_records: dict | None = None,
 ) -> PolicyAnalysisResponse:
     """
     Extract text from the uploaded file, run the LangGraph pipeline,
-    and return keywords + SQL ingestion plan + (optionally) generated SQL.
+    and return keywords + reconciliation + SQL ingestion plan + (optionally) SQL.
 
     Raises ValueError if the OPENROUTER_API_KEY is not configured.
     """
@@ -693,19 +1007,27 @@ async def analyze_policy_document(
         )
 
     pdf_text = _extract_text(filename, content)
+    _er = existing_records or {}
 
     initial_state: FPIState = {
         "pdf_text": pdf_text,
         "model_extract": model_extract or None,
         "model_plan": model_plan or None,
         "model_sql": model_sql or None,
+        "model_reconcile": model_reconcile or None,
         "keywords": None,
         "sql_plan": None,
         "sql_result": None,
+        "existing_organizations": _er.get("existing_organizations"),
+        "existing_regions": _er.get("existing_regions"),
+        "existing_policies": _er.get("existing_policies"),
+        "reconciliation": None,
         "extract_tokens": None,
+        "reconcile_tokens": None,
         "plan_tokens": None,
         "sql_tokens": None,
         "extract_duration_ms": None,
+        "reconcile_duration_ms": None,
         "plan_duration_ms": None,
         "sql_duration_ms": None,
         "error": None,
@@ -724,6 +1046,7 @@ async def analyze_policy_document(
     plan = final_state["sql_plan"]
     sql = final_state.get("sql_result")
     et = final_state.get("extract_tokens") or {}
+    rt = final_state.get("reconcile_tokens") or {}
     pt = final_state.get("plan_tokens") or {}
     st = final_state.get("sql_tokens") or {}
     token_usage = TokenUsage(
@@ -731,6 +1054,10 @@ async def analyze_policy_document(
         extract_completion=et.get("completion", 0),
         extract_total=et.get("total", 0),
         extract_duration_ms=final_state.get("extract_duration_ms") or 0,
+        reconcile_prompt=rt.get("prompt", 0),
+        reconcile_completion=rt.get("completion", 0),
+        reconcile_total=rt.get("total", 0),
+        reconcile_duration_ms=final_state.get("reconcile_duration_ms") or 0,
         plan_prompt=pt.get("prompt", 0),
         plan_completion=pt.get("completion", 0),
         plan_total=pt.get("total", 0),
@@ -743,6 +1070,7 @@ async def analyze_policy_document(
     return PolicyAnalysisResponse(
         filename=filename,
         keywords=kw,
+        reconciliation=final_state.get("reconciliation"),
         sql_plan=plan,
         sql_result=sql,
         formatted_keywords=_format_keywords(kw) if kw else "",
@@ -767,6 +1095,8 @@ async def stream_policy_analysis(
     model_extract: str | None = None,
     model_plan: str | None = None,
     model_sql: str | None = None,
+    model_reconcile: str | None = None,
+    existing_records: dict | None = None,
     db=None,
     analytics_db=None,
     default_model: str | None = None,
@@ -787,19 +1117,27 @@ async def stream_policy_analysis(
         return
 
     pdf_text = _extract_text(filename, content)
+    _er = existing_records or {}
 
     initial_state: FPIState = {
         "pdf_text": pdf_text,
         "model_extract": model_extract or None,
         "model_plan": model_plan or None,
         "model_sql": model_sql or None,
+        "model_reconcile": model_reconcile or None,
         "keywords": None,
         "sql_plan": None,
         "sql_result": None,
+        "existing_organizations": _er.get("existing_organizations"),
+        "existing_regions": _er.get("existing_regions"),
+        "existing_policies": _er.get("existing_policies"),
+        "reconciliation": None,
         "extract_tokens": None,
+        "reconcile_tokens": None,
         "plan_tokens": None,
         "sql_tokens": None,
         "extract_duration_ms": None,
+        "reconcile_duration_ms": None,
         "plan_duration_ms": None,
         "sql_duration_ms": None,
         "error": None,
@@ -855,7 +1193,24 @@ async def stream_policy_analysis(
                     "token_usage": token_data,
                 })
                 _log_entries.append(("extract", model_extract, et, state_update.get("extract_duration_ms", 0)))
-                # Signal next step
+                # Signal next step: reconciliation
+                yield _sse_event("step_start", {"step": "reconcile", "message": "Reconciling entities with existing database..."})
+
+            elif node_name == "node_reconcile":
+                recon = state_update.get("reconciliation")
+                rt = state_update.get("reconcile_tokens") or {}
+                token_data = {
+                    "reconcile_prompt": rt.get("prompt", 0),
+                    "reconcile_completion": rt.get("completion", 0),
+                    "reconcile_total": rt.get("total", 0),
+                    "reconcile_duration_ms": state_update.get("reconcile_duration_ms", 0),
+                }
+                yield _sse_event("reconcile", {
+                    "reconciliation": recon.model_dump() if recon else None,
+                    "token_usage": token_data,
+                })
+                _log_entries.append(("reconcile", model_reconcile, rt, state_update.get("reconcile_duration_ms", 0)))
+                # Signal next step: plan
                 yield _sse_event("step_start", {"step": "plan", "message": "Building SQL ingestion plan..."})
 
             elif node_name == "node_plan":
