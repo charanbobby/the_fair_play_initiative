@@ -25,9 +25,19 @@ class Settings:
     # Database
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./fpi.db")
 
+    # Playground mode — set PLAYGROUND_MODE=true to enable the playground UI.
+    # When not set, auto-detects from DATABASE_URL (sqlite = playground).
+    _PLAYGROUND_MODE_RAW: str = os.getenv("PLAYGROUND_MODE", "auto")
+
     @property
     def IS_PLAYGROUND(self) -> bool:
-        """Playground mode when using SQLite (default). Production uses PostgreSQL."""
+        """Explicit PLAYGROUND_MODE env var wins; 'auto' falls back to SQLite detection."""
+        val = self._PLAYGROUND_MODE_RAW.lower().strip()
+        if val in ("true", "1", "yes"):
+            return True
+        if val in ("false", "0", "no"):
+            return False
+        # "auto" or any other value — derive from DB type
         return self.DATABASE_URL.startswith("sqlite")
 
     # Server

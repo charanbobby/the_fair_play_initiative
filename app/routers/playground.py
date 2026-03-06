@@ -3,8 +3,9 @@ app/routers/playground.py
 -------------------------
 Playground-mode endpoints: status, reset, seed, and sample policies.
 
-Playground mode is active when DATABASE_URL points to SQLite (the default).
-Reset and seed endpoints return 403 when running against PostgreSQL.
+Playground mode is controlled by the PLAYGROUND_MODE env var (true/false/auto).
+When 'auto', it is active when DATABASE_URL points to SQLite.
+Reset and seed endpoints return 403 when playground mode is off.
 """
 
 from __future__ import annotations
@@ -16,13 +17,34 @@ from sqlalchemy.orm import Session
 
 from app import models
 from app.config import settings
-from app.database import engine, SessionLocal, get_db
+from app.database import get_db
 from app.sample_policies import SAMPLE_POLICIES
 from app.schemas import PlaygroundStatus
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/playground", tags=["playground"])
+
+# Tables to truncate in reverse-FK order (children first)
+_TRUNCATE_ORDER = [
+    models.AnalysisFeedback,
+    models.AnalysisLog,
+    models.Alert,
+    models.AttendanceLog,
+    models.PointHistory,
+    models.Employee,
+    models.Rule,
+    models.Policy,
+    models.Organization,  # will cascade organization_region
+    models.Region,
+]
+
+
+def _clear_all_data(db: Session) -> None:
+    """Delete all rows from every table. Works on both SQLite and PostgreSQL."""
+    for model_cls in _TRUNCATE_ORDER:
+        db.query(model_cls).delete()
+    db.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -32,7 +54,7 @@ router = APIRouter(prefix="/playground", tags=["playground"])
 @router.get("/status", response_model=PlaygroundStatus)
 def playground_status(db: Session = Depends(get_db)):
     """Return current mode, DB engine type, record counts, and sample policy list."""
-    db_engine = "sqlite" if settings.IS_PLAYGROUND else "postgresql"
+    db_engine = "sqlite" if settings.DATABASE_URL.startswith("sqlite") else "postgresql"
 
     counts = {}
     for model_cls, label in [
@@ -78,17 +100,15 @@ def get_sample_policies():
 
 @router.post("/reset")
 def reset_playground(db: Session = Depends(get_db)):
-    """Drop all tables and recreate the empty schema. Playground only."""
+    """Clear all data from every table. Playground only."""
     if not settings.IS_PLAYGROUND:
         raise HTTPException(403, "Reset is only available in Playground mode")
 
-    db.close()
-    models.Base.metadata.drop_all(bind=engine)
-    models.Base.metadata.create_all(bind=engine)
+    _clear_all_data(db)
     logger.info("playground: database reset complete")
     return {
         "status": "reset",
-        "message": "All data cleared. Database tables recreated.",
+        "message": "All data cleared. Tables are empty.",
     }
 
 
@@ -97,21 +117,16 @@ def reset_playground(db: Session = Depends(get_db)):
 # ---------------------------------------------------------------------------
 
 @router.post("/seed")
-def seed_playground():
-    """Reset the database and load demo seed data. Playground only."""
+def seed_playground(db: Session = Depends(get_db)):
+    """Clear all data, then load demo seed data. Playground only."""
     if not settings.IS_PLAYGROUND:
         raise HTTPException(403, "Seed is only available in Playground mode")
 
-    # Reset first (seed() is idempotent — skips if data exists)
-    models.Base.metadata.drop_all(bind=engine)
-    models.Base.metadata.create_all(bind=engine)
+    # Clear existing data first (seed() skips if data exists)
+    _clear_all_data(db)
 
-    db = SessionLocal()
-    try:
-        from app.seed import seed
-        seed(db)
-    finally:
-        db.close()
+    from app.seed import seed
+    seed(db)
 
     logger.info("playground: database seeded with demo data")
     return {
