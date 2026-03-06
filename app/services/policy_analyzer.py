@@ -44,9 +44,9 @@ _PLAN_SYSTEM_MSG: str = _PLAN_SYSTEM_TEMPLATE.replace("{{schema}}", _SCHEMA_JSON
 # LLM — ChatOpenAI pointed at OpenRouter
 # ---------------------------------------------------------------------------
 
-def _build_model() -> ChatOpenAI:
+def _build_model(model_override: str | None = None) -> ChatOpenAI:
     api_key = settings.OPENROUTER_API_KEY or settings.OPENAI_API_KEY
-    model_name = settings.LLM_MODEL or "gpt-4o-mini"
+    model_name = model_override or settings.LLM_MODEL or "gpt-4o-mini"
     return ChatOpenAI(
         model=model_name,
         base_url="https://openrouter.ai/api/v1",
@@ -61,6 +61,7 @@ def _build_model() -> ChatOpenAI:
 
 class FPIState(TypedDict):
     pdf_text: str
+    model_override: str | None
     keywords: KeywordExtraction | None
     sql_plan: SQLQueryPlan | None
     error: str | None
@@ -72,7 +73,7 @@ class FPIState(TypedDict):
 
 def node_extract(state: FPIState) -> dict:
     """Categorise policy keywords into schema-mapped groups."""
-    model = _build_model().with_structured_output(KeywordExtraction)
+    model = _build_model(state.get("model_override")).with_structured_output(KeywordExtraction)
     result = model.invoke([
         SystemMessage(content=_KEYWORD_SYSTEM_MSG),
         HumanMessage(content=state["pdf_text"]),
@@ -100,7 +101,7 @@ def node_plan(state: FPIState) -> dict:
     if not state.get("keywords"):
         return {"error": "node_plan: no keywords in state"}
 
-    model = _build_model().with_structured_output(SQLQueryPlan)
+    model = _build_model(state.get("model_override")).with_structured_output(SQLQueryPlan)
     human_msg = (
         "Devise an ingestion plan for the following keywords extracted from the "
         "attendance policy document. The plan must describe how to INSERT this "
@@ -251,7 +252,11 @@ def _format_plan(plan: SQLQueryPlan) -> str:
 # Public API
 # ---------------------------------------------------------------------------
 
-async def analyze_policy_document(filename: str, content: bytes) -> PolicyAnalysisResponse:
+async def analyze_policy_document(
+    filename: str,
+    content: bytes,
+    model_override: str | None = None,
+) -> PolicyAnalysisResponse:
     """
     Extract text from the uploaded file, run the LangGraph pipeline,
     and return keywords + SQL ingestion plan.
@@ -269,6 +274,7 @@ async def analyze_policy_document(filename: str, content: bytes) -> PolicyAnalys
 
     initial_state: FPIState = {
         "pdf_text": pdf_text,
+        "model_override": model_override or None,
         "keywords": None,
         "sql_plan": None,
         "error": None,

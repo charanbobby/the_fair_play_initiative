@@ -113,7 +113,7 @@
               <h1 class="text-xl font-bold">The Fair Play Initiative</h1>
               <p class="text-xs text-slate-400">
                 Balanced Attendance Management
-                <span class="ml-2 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.5.6</span>
+                <span class="ml-2 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.5.7</span>
               </p>
             </div>
           </div>
@@ -368,6 +368,44 @@
             class="mb-8 grid grid-cols-1 md:grid-cols-3 gap-4"
           >
             <!-- Populated by JS -->
+          </div>
+
+          <!-- Model Selector -->
+          <div class="mb-4 flex items-center gap-3">
+            <label for="llm-model-select" class="text-sm font-medium text-slate-600 whitespace-nowrap">
+              <i data-lucide="cpu" class="w-4 h-4 inline -mt-0.5"></i>
+              LLM Model
+            </label>
+            <select
+              id="llm-model-select"
+              class="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white flex-1 max-w-md"
+            >
+              <option value="">Default (server setting)</option>
+              <optgroup label="OpenAI">
+                <option value="openai/gpt-4o-mini">GPT-4o Mini</option>
+                <option value="openai/gpt-4o">GPT-4o</option>
+                <option value="openai/gpt-4.1">GPT-4.1</option>
+                <option value="openai/gpt-4.1-mini">GPT-4.1 Mini</option>
+              </optgroup>
+              <optgroup label="Anthropic">
+                <option value="anthropic/claude-sonnet-4">Claude Sonnet 4</option>
+                <option value="anthropic/claude-3.5-sonnet">Claude 3.5 Sonnet</option>
+                <option value="anthropic/claude-3.5-haiku">Claude 3.5 Haiku</option>
+              </optgroup>
+              <optgroup label="Google">
+                <option value="google/gemini-2.5-pro-preview">Gemini 2.5 Pro</option>
+                <option value="google/gemini-2.5-flash-preview">Gemini 2.5 Flash</option>
+                <option value="google/gemini-2.0-flash-001">Gemini 2.0 Flash</option>
+              </optgroup>
+              <optgroup label="Meta">
+                <option value="meta-llama/llama-4-maverick">Llama 4 Maverick</option>
+                <option value="meta-llama/llama-4-scout">Llama 4 Scout</option>
+              </optgroup>
+              <optgroup label="DeepSeek">
+                <option value="deepseek/deepseek-chat-v3">DeepSeek V3</option>
+                <option value="deepseek/deepseek-r1">DeepSeek R1</option>
+              </optgroup>
+            </select>
           </div>
 
           <!-- Upload Zone -->
@@ -2060,7 +2098,12 @@
           const formData = new FormData();
           formData.append("file", file);
 
-          const response = await fetch("/api/v1/policies/analyze", {
+          const selectedModel = document.getElementById("llm-model-select")?.value || "";
+          const analyzeUrl = selectedModel
+            ? `/api/v1/policies/analyze?model=${encodeURIComponent(selectedModel)}`
+            : "/api/v1/policies/analyze";
+
+          const response = await fetch(analyzeUrl, {
             method: "POST",
             body: formData,
           });
