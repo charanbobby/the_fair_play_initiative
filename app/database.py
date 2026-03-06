@@ -21,12 +21,16 @@ from app.config import settings
 # SQLite needs check_same_thread=False for multi-threaded use.
 # For Postgres, the connect_args dict is ignored.
 # ---------------------------------------------------------------------------
+_db_url = settings.DATABASE_URL
 connect_args: dict = {}
-if settings.DATABASE_URL.startswith("sqlite"):
+if _db_url.startswith("sqlite"):
     connect_args = {"check_same_thread": False}
+elif _db_url.startswith("postgresql") and "sslmode" not in _db_url:
+    # Supabase pooler requires SSL
+    _db_url += "?sslmode=require" if "?" not in _db_url else "&sslmode=require"
 
 engine = create_engine(
-    settings.DATABASE_URL,
+    _db_url,
     connect_args=connect_args,
     echo=False,  # set True to log SQL queries during development
 )
