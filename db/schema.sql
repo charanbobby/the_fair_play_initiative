@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS policies (
 -- 5. Rule
 -- ============================================================
 CREATE TABLE IF NOT EXISTS rules (
-    id          SERIAL  PRIMARY KEY,
+    id          TEXT    PRIMARY KEY,
     policy_id   TEXT    REFERENCES policies(id) ON DELETE CASCADE,  -- NULL = global rule
     name        TEXT    NOT NULL,
     condition   TEXT    NOT NULL,    -- 'late' | 'early' | 'absence' | 'no-call'

@@ -133,7 +133,7 @@ class Policy(Base):
 class Rule(Base):
     __tablename__ = "rules"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[str] = mapped_column(String, primary_key=True)
     policy_id: Mapped[Optional[str]] = mapped_column(
         String, ForeignKey("policies.id"), nullable=True
     )

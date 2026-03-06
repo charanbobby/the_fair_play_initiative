@@ -97,8 +97,9 @@ def seed(db: Session) -> None:
         )
         mult = p.get("multiplier", 1.0)
         thresh_mult = p.get("threshold_mult", 1.0)
-        for rt in DEFAULT_RULES_TEMPLATE:
+        for i, rt in enumerate(DEFAULT_RULES_TEMPLATE):
             rule = models.Rule(
+                id=f"{p['id']}-{rt['condition']}-{i}",
                 name=rt["name"],
                 condition=rt["condition"],
                 threshold=int(rt["threshold"] * thresh_mult),

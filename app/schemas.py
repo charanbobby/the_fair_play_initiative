@@ -139,7 +139,7 @@ class RuleBase(BaseModel):
 
 
 class RuleCreate(RuleBase):
-    pass
+    id: str
 
 
 class RuleUpdate(BaseModel):
@@ -153,7 +153,7 @@ class RuleUpdate(BaseModel):
 
 
 class RuleResponse(RuleBase):
-    id: int
+    id: str
     model_config = {"from_attributes": True}
 
 

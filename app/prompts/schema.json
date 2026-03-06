@@ -114,8 +114,8 @@
       "active"
     ],
     "column_semantics": {
-      "id": "SERIAL auto-generated integer — OMIT from INSERT statements",
-      "condition": "'late' | 'early' | 'absence' | 'no-call'",
+      "id": "lower-kebab-case slug (e.g. 'acme-hr-att-001-tardiness-gt-7-min')",
+      "condition": "human-readable description of when this rule triggers — reference the specific policy wording",
       "threshold": "INTEGER — minutes of deviation (0 = any)",
       "points": "REAL — penalty points for a single occurrence",
       "active": "TRUE = active, FALSE = inactive (boolean column — use TRUE/FALSE, not 1/0)"

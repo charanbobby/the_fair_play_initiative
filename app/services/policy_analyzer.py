@@ -532,36 +532,79 @@ def _rewrite_sqlite_to_pg(sql: str) -> str:
 
     - INSERT OR IGNORE INTO t (...) VALUES (...) → INSERT INTO t (...) VALUES (...) ON CONFLICT DO NOTHING
     - INSERT OR REPLACE INTO t (cols) VALUES (vals) → INSERT INTO t (cols) VALUES (vals) ON CONFLICT (id) DO UPDATE SET col=EXCLUDED.col, ...
+
+    The VALUES regex uses a quote-aware pattern so that semicolons
+    inside string literals (e.g. ``'...time; single...'``) are not
+    mistaken for statement terminators.
     """
+
+    # Pattern fragment: match VALUES(...) respecting quoted strings.
+    # Matches: single-quoted strings (with '' escapes), or any char that is
+    # not a closing paren, consuming everything inside the VALUES parens.
+    _VALUES_BODY = r"\((?:[^')]|'(?:[^']|'')*')*\)"
 
     def _replace_or_replace(m: re.Match) -> str:
         table = m.group("table")
         cols_str = m.group("cols")
-        rest = m.group("rest")
+        vals = m.group("vals")
         cols = [c.strip() for c in cols_str.split(",")]
         update_cols = [c for c in cols if c != "id"]
         set_clause = ", ".join(f"{c} = EXCLUDED.{c}" for c in update_cols)
         if set_clause:
-            return f"INSERT INTO {table} ({cols_str}) VALUES {rest} ON CONFLICT (id) DO UPDATE SET {set_clause}"
-        return f"INSERT INTO {table} ({cols_str}) VALUES {rest} ON CONFLICT (id) DO NOTHING"
+            return f"INSERT INTO {table} ({cols_str}) VALUES {vals} ON CONFLICT (id) DO UPDATE SET {set_clause}"
+        return f"INSERT INTO {table} ({cols_str}) VALUES {vals} ON CONFLICT (id) DO NOTHING"
 
     # INSERT OR IGNORE → ON CONFLICT DO NOTHING
     sql = re.sub(
-        r"INSERT\s+OR\s+IGNORE\s+INTO\s+(\S+)\s*\(([^)]+)\)\s*VALUES\s*(.+?)(?=;|$)",
-        lambda m: f"INSERT INTO {m.group(1)} ({m.group(2)}) VALUES {m.group(3)} ON CONFLICT DO NOTHING",
+        r"INSERT\s+OR\s+IGNORE\s+INTO\s+(\S+)\s*\(([^)]+)\)\s*VALUES\s*(?P<vals>" + _VALUES_BODY + r")",
+        lambda m: f"INSERT INTO {m.group(1)} ({m.group(2)}) VALUES {m.group('vals')} ON CONFLICT DO NOTHING",
         sql,
         flags=re.IGNORECASE | re.DOTALL,
     )
 
     # INSERT OR REPLACE → ON CONFLICT (id) DO UPDATE SET ...
     sql = re.sub(
-        r"INSERT\s+OR\s+REPLACE\s+INTO\s+(?P<table>\S+)\s*\((?P<cols>[^)]+)\)\s*VALUES\s*(?P<rest>.+?)(?=;|$)",
+        r"INSERT\s+OR\s+REPLACE\s+INTO\s+(?P<table>\S+)\s*\((?P<cols>[^)]+)\)\s*VALUES\s*(?P<vals>" + _VALUES_BODY + r")",
         _replace_or_replace,
         sql,
         flags=re.IGNORECASE | re.DOTALL,
     )
 
     return sql
+
+
+def _split_sql_statements(sql: str) -> list[str]:
+    """Split SQL text on statement-terminating semicolons, ignoring ``;`` inside single-quoted strings."""
+    stmts: list[str] = []
+    current: list[str] = []
+    in_quote = False
+    i = 0
+    while i < len(sql):
+        ch = sql[i]
+        if ch == "'" and not in_quote:
+            in_quote = True
+            current.append(ch)
+        elif ch == "'" and in_quote:
+            # Handle escaped quotes ('')
+            if i + 1 < len(sql) and sql[i + 1] == "'":
+                current.append("''")
+                i += 1
+            else:
+                in_quote = False
+                current.append(ch)
+        elif ch == ";" and not in_quote:
+            stmt = "".join(current).strip()
+            if stmt:
+                stmts.append(stmt)
+            current = []
+        else:
+            current.append(ch)
+        i += 1
+    # Trailing statement without semicolon
+    stmt = "".join(current).strip()
+    if stmt:
+        stmts.append(stmt)
+    return stmts
 
 
 def execute_sql_against_db(
@@ -595,7 +638,7 @@ def execute_sql_against_db(
             raw_conn.executescript(rewritten_sql)
             raw_conn.commit()
         else:
-            statements = [s.strip() for s in rewritten_sql.split(";") if s.strip()]
+            statements = _split_sql_statements(rewritten_sql)
             for stmt in statements:
                 db.execute(text(stmt))
             db.commit()

@@ -42,7 +42,7 @@ def create_rule(body: RuleCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/{rule_id}", response_model=RuleResponse)
-def get_rule(rule_id: int, db: Session = Depends(get_db)):
+def get_rule(rule_id: str, db: Session = Depends(get_db)):
     rule = db.get(models.Rule, rule_id)
     if not rule:
         raise HTTPException(status_code=404, detail="Rule not found")
@@ -50,7 +50,7 @@ def get_rule(rule_id: int, db: Session = Depends(get_db)):
 
 
 @router.put("/{rule_id}", response_model=RuleResponse)
-def update_rule(rule_id: int, body: RuleUpdate, db: Session = Depends(get_db)):
+def update_rule(rule_id: str, body: RuleUpdate, db: Session = Depends(get_db)):
     rule = db.get(models.Rule, rule_id)
     if not rule:
         raise HTTPException(status_code=404, detail="Rule not found")
@@ -62,7 +62,7 @@ def update_rule(rule_id: int, body: RuleUpdate, db: Session = Depends(get_db)):
 
 
 @router.patch("/{rule_id}/toggle", response_model=RuleResponse)
-def toggle_rule(rule_id: int, db: Session = Depends(get_db)):
+def toggle_rule(rule_id: str, db: Session = Depends(get_db)):
     rule = db.get(models.Rule, rule_id)
     if not rule:
         raise HTTPException(status_code=404, detail="Rule not found")
@@ -73,7 +73,7 @@ def toggle_rule(rule_id: int, db: Session = Depends(get_db)):
 
 
 @router.delete("/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_rule(rule_id: int, db: Session = Depends(get_db)):
+def delete_rule(rule_id: str, db: Session = Depends(get_db)):
     rule = db.get(models.Rule, rule_id)
     if not rule:
         raise HTTPException(status_code=404, detail="Rule not found")
