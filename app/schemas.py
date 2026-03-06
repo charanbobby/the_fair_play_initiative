@@ -523,6 +523,12 @@ class SQLGeneration(BaseModel):
     )
 
 
+class ExecuteSQLRequest(BaseModel):
+    """Request body for the decoupled SQL execution endpoint."""
+    sql_query: str = Field(description="The SQL to execute.")
+    tables_affected: list[str] = Field(default_factory=list)
+
+
 class QueryResults(BaseModel):
     """Row counts per config table after SQL execution."""
     row_counts: dict[str, int] = Field(default_factory=dict)

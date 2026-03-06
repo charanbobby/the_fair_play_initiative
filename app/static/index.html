@@ -113,7 +113,7 @@
               <h1 class="text-xl font-bold">The Fair Play Initiative</h1>
               <p class="text-xs text-slate-400">
                 Balanced Attendance Management
-                <span class="ml-2 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.9.1</span>
+                <span class="ml-2 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.9.2</span>
                 <span id="playground-badge" class="ml-1 bg-amber-500 text-amber-50 text-xs font-mono px-1.5 py-0.5 rounded hidden">Playground</span>
               </p>
             </div>
@@ -411,10 +411,7 @@
               <select id="llm-model-sql" class="llm-model-select border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white w-full" onchange="showModelCard('sql')"></select>
               <div id="model-card-sql" class="hidden mt-1 px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs text-slate-500"></div>
               <div id="model-stats-sql" class="hidden mt-1 px-2 py-1 text-xs text-slate-600"></div>
-              <div class="flex items-center gap-2 mt-1.5">
-                <input type="checkbox" id="execute-sql-toggle" class="rounded border-slate-300 accent-indigo-600">
-                <label for="execute-sql-toggle" class="text-xs text-slate-500">Execute SQL after generation</label>
-              </div>
+              <!-- Execute button appears after SQL generation in results -->
             </div>
           </div>
 
@@ -497,6 +494,14 @@
                 >
                   Clear
                 </button>
+              </div>
+            </div>
+
+            <!-- Step progress indicator (shown during streaming) -->
+            <div id="step-progress" class="hidden mb-4">
+              <div class="flex items-center gap-3 bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3">
+                <div class="w-5 h-5 border-3 border-indigo-200 border-t-indigo-600 rounded-full animate-spin flex-shrink-0"></div>
+                <span id="step-progress-label" class="text-sm text-indigo-700 font-medium"></span>
               </div>
             </div>
 
@@ -2389,10 +2394,225 @@
         });
       }
 
+      // ── SSE streaming infrastructure ──────────────────────────────────
+
+      const STEP_LABELS = {
+        extract: "Extracting keywords from policy document...",
+        plan: "Building SQL ingestion plan...",
+        sql: "Generating SQL statements...",
+      };
+
+      function showStepProgress(step) {
+        const el = document.getElementById("step-progress");
+        const label = document.getElementById("step-progress-label");
+        label.textContent = STEP_LABELS[step] || `Running ${step}...`;
+        el.classList.remove("hidden");
+      }
+
+      function hideStepProgress() {
+        document.getElementById("step-progress").classList.add("hidden");
+      }
+
+      function parseSSEBuffer(buffer) {
+        const parsed = [];
+        const blocks = buffer.split("\n\n");
+        const remainder = blocks.pop(); // last element may be incomplete
+        for (const block of blocks) {
+          if (!block.trim()) continue;
+          let eventName = "message";
+          let data = "";
+          for (const line of block.split("\n")) {
+            if (line.startsWith("event: ")) {
+              eventName = line.slice(7).trim();
+            } else if (line.startsWith("data: ")) {
+              data += line.slice(6);
+            }
+          }
+          if (data) {
+            try {
+              parsed.push({ event: eventName, data: JSON.parse(data) });
+            } catch (e) {
+              console.warn("Failed to parse SSE data:", data);
+            }
+          }
+        }
+        return { parsed, remainder };
+      }
+
+      // Accumulated data across SSE events
+      let _streamedAnalysisData = {
+        filename: null,
+        keywords: null,
+        sql_plan: null,
+        sql_result: null,
+        formatted_keywords: "",
+        formatted_plan: "",
+        formatted_sql: "",
+        token_usage: {},
+      };
+
+      function handleSSEEvent(evt) {
+        switch (evt.event) {
+          case "step_start":
+            showStepProgress(evt.data.step);
+            break;
+
+          case "extract":
+            hideStepProgress();
+            _streamedAnalysisData.keywords = evt.data.keywords;
+            _streamedAnalysisData.formatted_keywords = evt.data.formatted_keywords;
+            Object.assign(_streamedAnalysisData.token_usage, evt.data.token_usage);
+            renderKeywordsOnly(evt.data.keywords);
+            renderTokenBadge(evt.data.token_usage, "extract");
+            break;
+
+          case "plan":
+            hideStepProgress();
+            _streamedAnalysisData.sql_plan = evt.data.sql_plan;
+            _streamedAnalysisData.formatted_plan = evt.data.formatted_plan;
+            Object.assign(_streamedAnalysisData.token_usage, evt.data.token_usage);
+            renderPlanOnly(evt.data.sql_plan);
+            renderTokenBadge(evt.data.token_usage, "plan");
+            break;
+
+          case "sql":
+            hideStepProgress();
+            _streamedAnalysisData.sql_result = evt.data.sql_result;
+            _streamedAnalysisData.formatted_sql = evt.data.formatted_sql;
+            Object.assign(_streamedAnalysisData.token_usage, evt.data.token_usage);
+            renderSqlOnly(evt.data.sql_result);
+            renderTokenBadge(evt.data.token_usage, "sql");
+            break;
+
+          case "done":
+            hideStepProgress();
+            _streamedAnalysisData.filename = evt.data.filename;
+            _lastAnalysisData = { ..._streamedAnalysisData };
+            // Populate plain-text views
+            document.getElementById("plain-keywords").textContent = _streamedAnalysisData.formatted_keywords || "(no keywords)";
+            document.getElementById("plain-plan").textContent = _streamedAnalysisData.formatted_plan || "(no plan)";
+            if (_streamedAnalysisData.formatted_sql) {
+              document.getElementById("plain-sql").textContent = _streamedAnalysisData.formatted_sql;
+              document.getElementById("plain-sql-wrapper").classList.remove("hidden");
+            }
+            showToast("Analysis complete!");
+            break;
+
+          case "error":
+            hideStepProgress();
+            showToast(`Analysis failed at ${evt.data.step}: ${evt.data.message}`, "error");
+            break;
+        }
+      }
+
+      async function streamAnalysis(formData, queryString) {
+        clearAnalysisResults();
+        // Reset streamed data
+        _streamedAnalysisData = {
+          filename: null, keywords: null, sql_plan: null, sql_result: null,
+          formatted_keywords: "", formatted_plan: "", formatted_sql: "",
+          token_usage: {},
+        };
+
+        const resultsEl = document.getElementById("analysis-results");
+        resultsEl.classList.remove("hidden");
+        showStepProgress("extract");
+
+        const analyzeUrl = `/api/v1/policies/analyze/stream${queryString ? "?" + queryString : ""}`;
+
+        const response = await fetch(analyzeUrl, {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}));
+          throw new Error(err.detail || `Server error ${response.status}`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const events = parseSSEBuffer(buffer);
+          buffer = events.remainder;
+
+          for (const evt of events.parsed) {
+            handleSSEEvent(evt);
+          }
+        }
+
+        // Process any remaining buffer
+        if (buffer.trim()) {
+          const events = parseSSEBuffer(buffer + "\n\n");
+          for (const evt of events.parsed) {
+            handleSSEEvent(evt);
+          }
+        }
+      }
+
+      async function executeGeneratedSQL() {
+        const btn = document.getElementById("execute-sql-btn");
+        if (!btn) return;
+        const origHTML = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = `<span class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span>Executing...`;
+
+        try {
+          const sqlResult = _streamedAnalysisData.sql_result || (_lastAnalysisData && _lastAnalysisData.sql_result);
+          if (!sqlResult || !sqlResult.sql_query) {
+            showToast("No SQL to execute.", "error");
+            return;
+          }
+
+          const response = await fetch(`${API_BASE}/policies/execute-sql`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              sql_query: sqlResult.sql_query,
+              tables_affected: sqlResult.tables_affected || [],
+            }),
+          });
+
+          if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.detail || `Server error ${response.status}`);
+          }
+
+          const execResult = await response.json();
+          const plan = _streamedAnalysisData.sql_plan || (_lastAnalysisData && _lastAnalysisData.sql_plan);
+          renderExecOnly(execResult, sqlResult, plan);
+
+          // Remove execute button after successful execution
+          document.getElementById("execute-sql-btn-wrapper")?.remove();
+          showToast("SQL executed successfully!");
+        } catch (err) {
+          showToast(`Execution failed: ${err.message}`, "error");
+          btn.disabled = false;
+          btn.innerHTML = origHTML;
+        }
+      }
+
       // Policy Management
       function handlePolicyUpload(event) {
         const file = event.target.files[0];
         if (file) processPolicyFile(file);
+      }
+
+      function _buildModelParams() {
+        const extractModel = document.getElementById("llm-model-extract")?.value || "";
+        const planModel = document.getElementById("llm-model-plan")?.value || "";
+        const sqlModel = document.getElementById("llm-model-sql")?.value || "";
+        const params = new URLSearchParams();
+        if (extractModel) params.set("model_extract", extractModel);
+        if (planModel) params.set("model_plan", planModel);
+        if (sqlModel) params.set("model_sql", sqlModel);
+        return params.toString();
       }
 
       async function handlePolicyTextSubmit() {
@@ -2410,33 +2630,7 @@
         try {
           const formData = new FormData();
           formData.append("text", policyText);
-
-          const extractModel = document.getElementById("llm-model-extract")?.value || "";
-          const planModel = document.getElementById("llm-model-plan")?.value || "";
-          const sqlModel = document.getElementById("llm-model-sql")?.value || "";
-          const executeSQL = document.getElementById("execute-sql-toggle")?.checked || false;
-          const params = new URLSearchParams();
-          if (extractModel) params.set("model_extract", extractModel);
-          if (planModel) params.set("model_plan", planModel);
-          if (sqlModel) params.set("model_sql", sqlModel);
-          if (executeSQL && sqlModel) params.set("execute", "true");
-          const qs = params.toString();
-          const analyzeUrl = `/api/v1/policies/analyze${qs ? "?" + qs : ""}`;
-
-          const response = await fetch(analyzeUrl, {
-            method: "POST",
-            body: formData,
-          });
-
-          if (!response.ok) {
-            const err = await response.json().catch(() => ({}));
-            throw new Error(err.detail || `Server error ${response.status}`);
-          }
-
-          const data = await response.json();
-          renderAnalysisResults(data);
-          document.getElementById("analysis-results").classList.remove("hidden");
-          showToast("Analysis complete!");
+          await streamAnalysis(formData, _buildModelParams());
         } catch (err) {
           showToast(`Analysis failed: ${err.message}`, "error");
         } finally {
@@ -2449,49 +2643,21 @@
         const dropzone = document.getElementById("policy-dropzone");
         const originalHTML = dropzone.innerHTML;
 
-        // Show loading state
         dropzone.innerHTML = `
           <div class="flex flex-col items-center gap-3 py-4">
             <div class="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
             <p class="text-sm font-medium text-slate-600">Analysing <span class="font-semibold">${file.name}</span>…</p>
-            <p class="text-xs text-slate-400">Extracting keywords and building ingestion plan</p>
+            <p class="text-xs text-slate-400">Results will appear below as each step completes</p>
           </div>`;
 
         try {
           const formData = new FormData();
           formData.append("file", file);
-
-          const extractModel = document.getElementById("llm-model-extract")?.value || "";
-          const planModel = document.getElementById("llm-model-plan")?.value || "";
-          const sqlModel = document.getElementById("llm-model-sql")?.value || "";
-          const executeSQL = document.getElementById("execute-sql-toggle")?.checked || false;
-          const params = new URLSearchParams();
-          if (extractModel) params.set("model_extract", extractModel);
-          if (planModel) params.set("model_plan", planModel);
-          if (sqlModel) params.set("model_sql", sqlModel);
-          if (executeSQL && sqlModel) params.set("execute", "true");
-          const qs = params.toString();
-          const analyzeUrl = `/api/v1/policies/analyze${qs ? "?" + qs : ""}`;
-
-          const response = await fetch(analyzeUrl, {
-            method: "POST",
-            body: formData,
-          });
-
-          if (!response.ok) {
-            const err = await response.json().catch(() => ({}));
-            throw new Error(err.detail || `Server error ${response.status}`);
-          }
-
-          const data = await response.json();
-          renderAnalysisResults(data);
-          document.getElementById("analysis-results").classList.remove("hidden");
-          showToast("Analysis complete!");
+          await streamAnalysis(formData, _buildModelParams());
         } catch (err) {
           showToast(`Analysis failed: ${err.message}`, "error");
         } finally {
           dropzone.innerHTML = originalHTML;
-          // Re-attach file input handler after restoring HTML
           const fileInput = document.getElementById("policy-file");
           if (fileInput) fileInput.onchange = handlePolicyUpload;
           lucide.createIcons();
@@ -2575,46 +2741,29 @@
         return s;
       }
 
-      function renderAnalysisResults(data) {
-        _lastAnalysisData = data;
+      // ── Sub-functions for progressive rendering ─────────────────────
+      const _esc = (s) => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 
-        // ── Token usage display ────────────────────────────────────────────
-        const usage = data.token_usage;
-        if (usage) {
+      function renderTokenBadge(tokenData, step) {
+        if (!tokenData) return;
+        document.getElementById("token-usage").classList.remove("hidden");
+        if (step === "extract" && tokenData.extract_total !== undefined) {
           document.getElementById("tokens-extract").textContent =
-            (usage.extract_total || 0).toLocaleString();
+            (tokenData.extract_total || 0).toLocaleString();
+        }
+        if (step === "plan" && tokenData.plan_total !== undefined) {
           document.getElementById("tokens-plan").textContent =
-            (usage.plan_total || 0).toLocaleString();
-          document.getElementById("token-usage").classList.remove("hidden");
-          if (usage.sql_total > 0) {
-            document.getElementById("tokens-sql").textContent =
-              (usage.sql_total || 0).toLocaleString();
-            document.getElementById("tokens-sql-wrapper").classList.remove("hidden");
-          } else {
-            document.getElementById("tokens-sql-wrapper").classList.add("hidden");
-          }
+            (tokenData.plan_total || 0).toLocaleString();
         }
-
-        // ── Reset feedback buttons ─────────────────────────────────────────
-        document.querySelectorAll(".feedback-btn").forEach(btn => {
-          btn.classList.remove("bg-emerald-100", "border-emerald-400", "text-emerald-700",
-                               "bg-amber-100", "border-amber-400", "text-amber-700",
-                               "bg-red-100", "border-red-400", "text-red-700");
-        });
-
-        // ── Plain-text views (from backend _format_keywords / _format_plan) ─
-        const esc = (s) => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-        document.getElementById("plain-keywords").textContent = data.formatted_keywords || "(no keywords)";
-        document.getElementById("plain-plan").textContent = data.formatted_plan || "(no plan)";
-        if (data.formatted_sql) {
-          document.getElementById("plain-sql").textContent = data.formatted_sql;
-          document.getElementById("plain-sql-wrapper").classList.remove("hidden");
-        } else {
-          document.getElementById("plain-sql-wrapper").classList.add("hidden");
+        if (step === "sql" && tokenData.sql_total !== undefined && tokenData.sql_total > 0) {
+          document.getElementById("tokens-sql").textContent =
+            (tokenData.sql_total || 0).toLocaleString();
+          document.getElementById("tokens-sql-wrapper").classList.remove("hidden");
         }
+      }
 
-        // ── Keywords section ──────────────────────────────────────────────
-        const kw = data.keywords || {};
+      function renderKeywordsOnly(kw) {
+        if (!kw) return;
         const kwContainer = document.getElementById("keywords-section");
         const entityOrder = ["policy","organization","region","rule","attendance_log","point_history","alert","other_relevant_terms"];
 
@@ -2624,7 +2773,7 @@
             const colour = ENTITY_COLOURS[entity];
             const label  = ENTITY_LABELS[entity];
             const items  = kw[entity];
-            const CHIP_THRESHOLD = 50; // short terms → chips, long ones → list
+            const CHIP_THRESHOLD = 50;
             const allShort = items.every((t) => t.length <= CHIP_THRESHOLD);
 
             let content;
@@ -2657,15 +2806,17 @@
           })
           .join("");
 
-        // Confidence badge
         if (kw.confidence_score !== undefined) {
           const pct = Math.round(kw.confidence_score * 100);
           kwContainer.innerHTML += renderConfidenceBadge("Extraction", pct);
         }
+        lucide.createIcons();
+      }
 
-        // ── Plan section ──────────────────────────────────────────────────
-        const plan = data.sql_plan || {};
+      function renderPlanOnly(plan) {
+        if (!plan) return;
         const planContainer = document.getElementById("plan-section");
+        const esc = _esc;
         let planHTML = "";
 
         if (plan.objective) {
@@ -2772,13 +2923,12 @@
           planHTML += `</div></div>`;
         }
 
-        // ── Structured ingestion plan (table_steps + rule_rows) ────────
+        // Structured ingestion plan (table_steps + rule_rows)
         const hasStructuredPlan = plan.table_steps && plan.table_steps.length > 0;
 
         if (hasStructuredPlan) {
           let cteHTML = "";
 
-          // Table steps
           plan.table_steps.forEach((step) => {
             cteHTML += `<div class="flex items-start gap-2 py-1.5">
               <span class="bg-indigo-100 text-indigo-700 text-xs font-bold w-5 h-5 rounded flex items-center justify-center shrink-0">${step.step_number}</span>
@@ -2795,7 +2945,6 @@
             </div>`;
           });
 
-          // Rule rows grouped by category
           if (plan.rule_rows && plan.rule_rows.length > 0) {
             const groups = [
               { key: "violation",  label: "Violation / Occurrence Rules",         letter: "A" },
@@ -2833,13 +2982,11 @@
             });
           }
 
-          // ID chaining summary
           if (plan.id_chaining_summary && plan.id_chaining_summary.length > 0) {
             cteHTML += `<div class="mt-3 mb-1 text-xs font-semibold text-slate-500 uppercase tracking-wide">ID Chaining Summary</div>`;
             cteHTML += `<div class="text-xs text-slate-500 leading-relaxed ml-2">${plan.id_chaining_summary.map(s => esc(s)).join("<br>")}</div>`;
           }
 
-          // Operational reminders
           if (plan.operational_reminders && plan.operational_reminders.length > 0) {
             cteHTML += `<div class="mt-3 mb-1 text-xs font-semibold text-slate-500 uppercase tracking-wide">Operational Reminders</div>`;
             cteHTML += `<div class="text-xs text-slate-500 leading-relaxed ml-2">${plan.operational_reminders.map(s => "— " + esc(s)).join("<br>")}</div>`;
@@ -2850,7 +2997,6 @@
             <div class="bg-slate-50 rounded-xl p-4 border border-slate-200 max-h-[32rem] overflow-y-auto space-y-1">${cteHTML}</div>
           </div>`;
         }
-        // Legacy fallback for old responses with only cte_description
         else if (plan.cte_description) {
           const legacyEsc = (s) => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
           const cteText = normalizeCteDescription(plan.cte_description);
@@ -2868,9 +3014,11 @@
         }
 
         planContainer.innerHTML = planHTML || `<p class="text-sm text-slate-400">No plan generated.</p>`;
+        lucide.createIcons();
+      }
 
-        // ── SQL Generation section ──────────────────────────────────────
-        const sqlResult = data.sql_result;
+      function renderSqlOnly(sqlResult) {
+        const esc = _esc;
         const sqlWrapper = document.getElementById("sql-section-wrapper");
         const sqlDivider = document.getElementById("sql-divider");
 
@@ -2911,13 +3059,32 @@
           </details>`;
 
           document.getElementById("sql-section").innerHTML = sqlHTML;
+
+          // Show execute button in playground mode
+          if (_isPlayground) {
+            const btnHTML = `
+              <div id="execute-sql-btn-wrapper" class="mt-4 flex items-center gap-3">
+                <button
+                  id="execute-sql-btn"
+                  onclick="executeGeneratedSQL()"
+                  class="bg-emerald-600 text-white px-5 py-2 rounded-lg hover:bg-emerald-700 transition text-sm font-medium flex items-center gap-2"
+                >
+                  <i data-lucide="play" class="w-4 h-4"></i>
+                  Execute SQL
+                </button>
+                <span class="text-xs text-slate-400">Review the SQL above before executing</span>
+              </div>`;
+            document.getElementById("sql-section").insertAdjacentHTML("beforeend", btnHTML);
+          }
         } else {
           sqlWrapper.classList.add("hidden");
           sqlDivider.classList.add("hidden");
         }
+        lucide.createIcons();
+      }
 
-        // ── Execution Results section ───────────────────────────────────
-        const execResult = data.query_results;
+      function renderExecOnly(execResult, sqlResult, plan) {
+        const esc = _esc;
         const execWrapper = document.getElementById("exec-section-wrapper");
 
         if (execResult) {
@@ -2929,14 +3096,11 @@
               <strong>Execution Error:</strong> ${esc(execResult.error)}
             </div>`;
           } else {
-            // Extract org/policy names from id_chain for summary
             const idChain = (sqlResult && sqlResult.id_chain) || [];
             const orgSlug = idChain.find(c => c.startsWith("organization:"))?.split(":")[1] || "";
             const policySlug = idChain.find(c => c.startsWith("policy:"))?.split(":")[1] || "";
             const ruleCount = (sqlResult && sqlResult.rule_count) || 0;
-            const orgName = (plan && plan.objective) || orgSlug;
 
-            // Ingested data summary
             execHTML += `<div class="bg-indigo-50 border border-indigo-200 rounded-lg p-4 mb-4">
               <div class="flex items-center gap-2 mb-2">
                 <i data-lucide="building" class="w-5 h-5 text-indigo-600"></i>
@@ -2982,7 +3146,6 @@
             </tr>`;
             execHTML += `</tbody></table></div>`;
 
-            // Auto-refresh dashboard data so the new org/policy/rules appear
             loadDataFromAPI().then(() => {
               populateOrganizationFilter();
               renderDashboard();
@@ -2996,12 +3159,47 @@
         } else {
           execWrapper.classList.add("hidden");
         }
-
         lucide.createIcons();
+      }
+
+      // ── Wrapper for backward compatibility (non-streaming path) ──────
+      function renderAnalysisResults(data) {
+        _lastAnalysisData = data;
+
+        // Reset feedback buttons
+        document.querySelectorAll(".feedback-btn").forEach(btn => {
+          btn.classList.remove("bg-emerald-100", "border-emerald-400", "text-emerald-700",
+                               "bg-amber-100", "border-amber-400", "text-amber-700",
+                               "bg-red-100", "border-red-400", "text-red-700");
+        });
+
+        // Token usage
+        const usage = data.token_usage;
+        if (usage) {
+          renderTokenBadge(usage, "extract");
+          renderTokenBadge(usage, "plan");
+          if (usage.sql_total > 0) renderTokenBadge(usage, "sql");
+        }
+
+        // Plain-text views
+        document.getElementById("plain-keywords").textContent = data.formatted_keywords || "(no keywords)";
+        document.getElementById("plain-plan").textContent = data.formatted_plan || "(no plan)";
+        if (data.formatted_sql) {
+          document.getElementById("plain-sql").textContent = data.formatted_sql;
+          document.getElementById("plain-sql-wrapper").classList.remove("hidden");
+        } else {
+          document.getElementById("plain-sql-wrapper").classList.add("hidden");
+        }
+
+        renderKeywordsOnly(data.keywords);
+        renderPlanOnly(data.sql_plan);
+        renderSqlOnly(data.sql_result);
+        renderExecOnly(data.query_results, data.sql_result, data.sql_plan);
       }
 
       function clearAnalysisResults() {
         document.getElementById("analysis-results").classList.add("hidden");
+        document.getElementById("step-progress").classList.add("hidden");
         document.getElementById("keywords-section").innerHTML = "";
         document.getElementById("plan-section").innerHTML = "";
         document.getElementById("sql-section").innerHTML = "";
@@ -3014,6 +3212,7 @@
         document.getElementById("plain-sql-wrapper").classList.add("hidden");
         document.getElementById("token-usage").classList.add("hidden");
         document.getElementById("tokens-sql-wrapper").classList.add("hidden");
+        document.getElementById("execute-sql-btn-wrapper")?.remove();
         _lastAnalysisData = null;
         // Reset feedback buttons
         document.querySelectorAll(".feedback-btn").forEach(btn => {

@@ -13,11 +13,19 @@ from __future__ import annotations
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, File, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app import models
-from app.schemas import PolicyCreate, PolicyResponse, PolicyUpdate, PolicyAnalysisResponse
+from app.schemas import (
+    ExecuteSQLRequest,
+    PolicyCreate,
+    PolicyResponse,
+    PolicyUpdate,
+    PolicyAnalysisResponse,
+    QueryResults,
+)
 
 router = APIRouter(prefix="/policies", tags=["policies"])
 
@@ -191,3 +199,111 @@ async def analyze_policy(
         raise HTTPException(status_code=503, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Analysis failed: {exc}")
+
+
+# ---------------------------------------------------------------------------
+# Streaming analysis (SSE)
+# ---------------------------------------------------------------------------
+
+@router.post("/analyze/stream", tags=["policies"])
+async def analyze_policy_stream(
+    file: Optional[UploadFile] = File(None),
+    text: Optional[str] = Form(None),
+    model_extract: Optional[str] = None,
+    model_plan: Optional[str] = None,
+    model_sql: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Stream policy analysis results as Server-Sent Events.
+
+    Each pipeline step emits an SSE event as it completes:
+      - event: step_start  (step about to begin)
+      - event: extract     (keyword extraction results)
+      - event: plan        (SQL ingestion plan results)
+      - event: sql         (SQL generation results — only if model_sql set)
+      - event: done        (pipeline complete)
+      - event: error       (if a step fails)
+    """
+    from pathlib import Path
+    from app.config import settings
+    from app.services.policy_analyzer import stream_policy_analysis
+
+    if file and file.filename:
+        allowed = {".pdf", ".docx", ".doc", ".txt"}
+        ext = Path(file.filename).suffix.lower()
+        if ext not in allowed:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported file type '{ext}'. Allowed: {', '.join(sorted(allowed))}",
+            )
+        content = await file.read()
+        if not content:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+        filename = file.filename
+    elif text and text.strip():
+        content = text.strip().encode("utf-8")
+        filename = "pasted_policy.txt"
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Provide either a file upload or paste policy text.",
+        )
+
+    async def event_generator():
+        async for event in stream_policy_analysis(
+            filename, content,
+            model_extract=model_extract,
+            model_plan=model_plan,
+            model_sql=model_sql,
+            db=db,
+            default_model=settings.LLM_MODEL,
+        ):
+            yield event
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# Decoupled SQL execution
+# ---------------------------------------------------------------------------
+
+@router.post("/execute-sql", response_model=QueryResults, tags=["policies"])
+async def execute_sql_endpoint(
+    body: ExecuteSQLRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Execute LLM-generated SQL against the database (playground only).
+
+    This is a separate step from analysis — the user reviews the SQL
+    first, then explicitly triggers execution.
+    """
+    from app.config import settings
+    from app.services.policy_analyzer import execute_sql_against_db
+    from app.schemas import SQLGeneration
+
+    if not settings.IS_PLAYGROUND:
+        raise HTTPException(
+            status_code=400,
+            detail="SQL execution is only available in Playground mode.",
+        )
+
+    if not body.sql_query.strip():
+        raise HTTPException(status_code=400, detail="SQL query is empty.")
+
+    # Wrap in SQLGeneration so execute_sql_against_db can process it
+    sql_gen = SQLGeneration(
+        sql_query=body.sql_query,
+        tables_affected=body.tables_affected,
+    )
+    is_sqlite = settings.DATABASE_URL.startswith("sqlite")
+    return execute_sql_against_db(db, sql_gen, is_sqlite)

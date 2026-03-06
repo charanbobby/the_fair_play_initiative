@@ -17,10 +17,12 @@ db session — see ``execute_sql_against_db()``.
 
 from __future__ import annotations
 
+import asyncio
 import io
+import json
 import re
 from pathlib import Path
-from typing import TypedDict
+from typing import AsyncGenerator, TypedDict
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
@@ -706,3 +708,165 @@ async def analyze_policy_document(
         formatted_sql=sql.sql_query if sql else "",
         token_usage=token_usage,
     )
+
+
+# ---------------------------------------------------------------------------
+# SSE streaming API
+# ---------------------------------------------------------------------------
+
+def _sse_event(event_name: str, data: dict) -> str:
+    """Format a single Server-Sent Event string."""
+    return f"event: {event_name}\ndata: {json.dumps(data)}\n\n"
+
+
+async def stream_policy_analysis(
+    filename: str,
+    content: bytes,
+    model_extract: str | None = None,
+    model_plan: str | None = None,
+    model_sql: str | None = None,
+    db=None,
+    default_model: str | None = None,
+) -> AsyncGenerator[str, None]:
+    """
+    Stream analysis results as SSE events, one per graph node completion.
+
+    Uses LangGraph's ``graph.stream()`` in a background thread, pushing
+    each node's output through an ``asyncio.Queue`` so the async generator
+    can yield SSE events as soon as each step finishes.
+    """
+    import logging
+    log = logging.getLogger(__name__)
+
+    api_key = settings.OPENROUTER_API_KEY or settings.OPENAI_API_KEY
+    if not api_key:
+        yield _sse_event("error", {"step": "init", "message": "OPENROUTER_API_KEY not set"})
+        return
+
+    pdf_text = _extract_text(filename, content)
+
+    initial_state: FPIState = {
+        "pdf_text": pdf_text,
+        "model_extract": model_extract or None,
+        "model_plan": model_plan or None,
+        "model_sql": model_sql or None,
+        "keywords": None,
+        "sql_plan": None,
+        "sql_result": None,
+        "extract_tokens": None,
+        "plan_tokens": None,
+        "sql_tokens": None,
+        "extract_duration_ms": None,
+        "plan_duration_ms": None,
+        "sql_duration_ms": None,
+        "error": None,
+    }
+
+    queue: asyncio.Queue = asyncio.Queue()
+    loop = asyncio.get_event_loop()
+
+    def _run_stream_to_queue():
+        try:
+            for chunk in _graph.stream(initial_state):
+                asyncio.run_coroutine_threadsafe(queue.put(chunk), loop)
+        except Exception as exc:
+            asyncio.run_coroutine_threadsafe(queue.put(exc), loop)
+        finally:
+            asyncio.run_coroutine_threadsafe(queue.put(None), loop)  # sentinel
+
+    # Emit initial step_start
+    yield _sse_event("step_start", {"step": "extract", "message": "Extracting keywords from policy document..."})
+
+    # Start graph streaming in background thread
+    loop.run_in_executor(None, _run_stream_to_queue)
+
+    # Accumulate token data for analysis log saving
+    _log_entries = []
+
+    while True:
+        item = await queue.get()
+        if item is None:
+            break  # sentinel — stream finished
+        if isinstance(item, Exception):
+            yield _sse_event("error", {"step": "graph", "message": str(item)})
+            return
+
+        # item is a chunk dict like {"node_extract": {updated_keys}}
+        for node_name, state_update in item.items():
+            if state_update.get("error"):
+                yield _sse_event("error", {"step": node_name, "message": state_update["error"]})
+                return
+
+            if node_name == "node_extract":
+                kw = state_update["keywords"]
+                et = state_update.get("extract_tokens") or {}
+                token_data = {
+                    "extract_prompt": et.get("prompt", 0),
+                    "extract_completion": et.get("completion", 0),
+                    "extract_total": et.get("total", 0),
+                    "extract_duration_ms": state_update.get("extract_duration_ms", 0),
+                }
+                yield _sse_event("extract", {
+                    "keywords": kw.model_dump(),
+                    "formatted_keywords": _format_keywords(kw),
+                    "token_usage": token_data,
+                })
+                _log_entries.append(("extract", model_extract, et, state_update.get("extract_duration_ms", 0)))
+                # Signal next step
+                yield _sse_event("step_start", {"step": "plan", "message": "Building SQL ingestion plan..."})
+
+            elif node_name == "node_plan":
+                plan = state_update["sql_plan"]
+                pt = state_update.get("plan_tokens") or {}
+                token_data = {
+                    "plan_prompt": pt.get("prompt", 0),
+                    "plan_completion": pt.get("completion", 0),
+                    "plan_total": pt.get("total", 0),
+                    "plan_duration_ms": state_update.get("plan_duration_ms", 0),
+                }
+                yield _sse_event("plan", {
+                    "sql_plan": plan.model_dump(),
+                    "formatted_plan": _format_plan(plan),
+                    "token_usage": token_data,
+                })
+                _log_entries.append(("plan", model_plan, pt, state_update.get("plan_duration_ms", 0)))
+                if model_sql:
+                    yield _sse_event("step_start", {"step": "sql", "message": "Generating SQL statements..."})
+
+            elif node_name == "node_generate_sql":
+                sql = state_update["sql_result"]
+                st = state_update.get("sql_tokens") or {}
+                token_data = {
+                    "sql_prompt": st.get("prompt", 0),
+                    "sql_completion": st.get("completion", 0),
+                    "sql_total": st.get("total", 0),
+                    "sql_duration_ms": state_update.get("sql_duration_ms", 0),
+                }
+                yield _sse_event("sql", {
+                    "sql_result": sql.model_dump(),
+                    "formatted_sql": sql.sql_query if sql else "",
+                    "token_usage": token_data,
+                })
+                _log_entries.append(("sql", model_sql, st, state_update.get("sql_duration_ms", 0)))
+
+    # Save analysis logs before done event
+    if db and _log_entries:
+        try:
+            from app import models
+            _default = default_model or settings.LLM_MODEL or "gpt-4o-mini"
+            for step, model_override, tokens, duration in _log_entries:
+                db.add(models.AnalysisLog(
+                    filename=filename,
+                    step=step,
+                    llm_model=model_override or _default,
+                    prompt_tokens=tokens.get("prompt", 0),
+                    completion_tokens=tokens.get("completion", 0),
+                    total_tokens=tokens.get("total", 0),
+                    duration_ms=duration,
+                ))
+            db.commit()
+        except Exception:
+            log.warning("Failed to save analysis logs", exc_info=True)
+            db.rollback()
+
+    yield _sse_event("done", {"filename": filename})

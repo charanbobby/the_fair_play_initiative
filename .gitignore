@@ -41,3 +41,8 @@ input_files/
 
 # windows artifacts
 nul
+
+# canvas
+canvas/
+
+images/
