@@ -123,6 +123,33 @@ CREATE TABLE IF NOT EXISTS alert (
 );
 
 -- ============================================================
+-- 10. AnalysisLog — auto-saved on each policy analysis run
+-- ============================================================
+CREATE TABLE IF NOT EXISTS analysis_logs (
+    id              SERIAL       PRIMARY KEY,
+    filename        TEXT         NOT NULL,
+    step            TEXT         NOT NULL,      -- 'extract' | 'plan'
+    llm_model       TEXT         NOT NULL,
+    prompt_tokens   INTEGER      NOT NULL DEFAULT 0,
+    completion_tokens INTEGER    NOT NULL DEFAULT 0,
+    total_tokens    INTEGER      NOT NULL DEFAULT 0,
+    duration_ms     INTEGER      NOT NULL DEFAULT 0,
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+-- ============================================================
+-- 11. AnalysisFeedback — user-submitted Good/Partial/Bad ratings
+-- ============================================================
+CREATE TABLE IF NOT EXISTS analysis_feedback (
+    id              SERIAL       PRIMARY KEY,
+    step            TEXT         NOT NULL,      -- 'extract' | 'plan'
+    rating          TEXT         NOT NULL,      -- 'good' | 'partial' | 'bad'
+    llm_model       TEXT         NOT NULL,
+    filename        TEXT,
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+-- ============================================================
 -- Indexes
 -- ============================================================
 CREATE INDEX IF NOT EXISTS idx_employee_org       ON employee(organization_id);
