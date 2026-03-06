@@ -98,6 +98,29 @@
         transform: translateY(-2px);
         box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
       }
+      /* Collapsible analysis sections */
+      .collapsible-section summary {
+        list-style: none;
+      }
+      .collapsible-section summary::-webkit-details-marker {
+        display: none;
+      }
+      .collapsible-section summary .collapse-arrow {
+        display: inline-block;
+        transition: transform 0.2s ease;
+        font-size: 0.6rem;
+        color: #94a3b8;
+      }
+      .collapsible-section[open] summary .collapse-arrow {
+        transform: rotate(90deg);
+      }
+      .collapsible-section .collapsible-body {
+        animation: collapseOpen 0.2s ease;
+      }
+      @keyframes collapseOpen {
+        from { opacity: 0; max-height: 0; }
+        to   { opacity: 1; max-height: 2000px; }
+      }
     </style>
   </head>
   <body class="bg-slate-50 text-slate-800">
@@ -113,7 +136,7 @@
               <h1 class="text-xl font-bold">The Fair Play Initiative</h1>
               <p class="text-xs text-slate-400">
                 Balanced Attendance Management
-                <span class="ml-2 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.9.8</span>
+                <span class="ml-2 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.9.9</span>
                 <span id="playground-badge" class="ml-1 bg-amber-500 text-amber-50 text-xs font-mono px-1.5 py-0.5 rounded hidden">Playground</span>
               </p>
             </div>
@@ -489,6 +512,13 @@
                   Plain Text
                 </button>
                 <button
+                  id="collapse-all-toggle"
+                  onclick="toggleAllSections()"
+                  class="text-xs bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg hover:bg-slate-200 transition font-medium"
+                >
+                  Collapse All
+                </button>
+                <button
                   onclick="clearAnalysisResults()"
                   class="text-sm bg-slate-100 text-slate-700 px-3 py-1 rounded-lg hover:bg-slate-200 transition"
                 >
@@ -523,101 +553,130 @@
 
             <!-- Rich view (default) -->
             <div id="rich-view">
-              <!-- Extracted Keywords -->
-              <div class="mb-6">
-                <div class="flex items-center justify-between mb-3">
-                  <h5 class="text-sm font-semibold text-slate-600 uppercase tracking-wide">
+              <!-- Extracted Keywords (collapsible) -->
+              <details open class="collapsible-section mb-4 border border-slate-200 rounded-lg overflow-hidden">
+                <summary class="flex items-center justify-between px-4 py-2.5 bg-slate-50 cursor-pointer hover:bg-slate-100 transition select-none">
+                  <h5 class="text-sm font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-2">
+                    <span class="collapse-arrow">&#9654;</span>
                     Extracted Keywords
                   </h5>
-                  <div id="feedback-extract" class="flex items-center gap-1" data-step="extract">
+                  <div id="feedback-extract" class="flex items-center gap-1" data-step="extract" onclick="event.stopPropagation()">
                     <span class="text-xs text-slate-400 mr-1">Rate:</span>
-                    <button onclick="submitFeedback('extract','good')" class="feedback-btn px-2 py-0.5 rounded text-xs border border-slate-200 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-700 transition" title="Good">Good</button>
-                    <button onclick="submitFeedback('extract','partial')" class="feedback-btn px-2 py-0.5 rounded text-xs border border-slate-200 hover:bg-amber-50 hover:border-amber-300 hover:text-amber-700 transition" title="Partial">Partial</button>
-                    <button onclick="submitFeedback('extract','bad')" class="feedback-btn px-2 py-0.5 rounded text-xs border border-slate-200 hover:bg-red-50 hover:border-red-300 hover:text-red-700 transition" title="Bad">Bad</button>
+                    <button onclick="event.stopPropagation();submitFeedback('extract','good')" class="feedback-btn px-2 py-0.5 rounded text-xs border border-slate-200 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-700 transition" title="Good">Good</button>
+                    <button onclick="event.stopPropagation();submitFeedback('extract','partial')" class="feedback-btn px-2 py-0.5 rounded text-xs border border-slate-200 hover:bg-amber-50 hover:border-amber-300 hover:text-amber-700 transition" title="Partial">Partial</button>
+                    <button onclick="event.stopPropagation();submitFeedback('extract','bad')" class="feedback-btn px-2 py-0.5 rounded text-xs border border-slate-200 hover:bg-red-50 hover:border-red-300 hover:text-red-700 transition" title="Bad">Bad</button>
+                  </div>
+                </summary>
+                <div class="collapsible-body px-4 py-3">
+                  <div id="keywords-section" class="space-y-3">
+                    <!-- Populated by JS -->
                   </div>
                 </div>
-                <div id="keywords-section" class="space-y-3">
-                  <!-- Populated by JS -->
-                </div>
-              </div>
+              </details>
 
-              <!-- Divider -->
-              <div class="border-t border-slate-200 my-6"></div>
-
-              <!-- Query Plan -->
-              <div>
-                <div class="flex items-center justify-between mb-3">
-                  <h5 class="text-sm font-semibold text-slate-600 uppercase tracking-wide">
+              <!-- Query Plan (collapsible) -->
+              <details open class="collapsible-section mb-4 border border-slate-200 rounded-lg overflow-hidden">
+                <summary class="flex items-center justify-between px-4 py-2.5 bg-slate-50 cursor-pointer hover:bg-slate-100 transition select-none">
+                  <h5 class="text-sm font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-2">
+                    <span class="collapse-arrow">&#9654;</span>
                     SQL Ingestion Plan
                   </h5>
-                  <div id="feedback-plan" class="flex items-center gap-1" data-step="plan">
+                  <div id="feedback-plan" class="flex items-center gap-1" data-step="plan" onclick="event.stopPropagation()">
                     <span class="text-xs text-slate-400 mr-1">Rate:</span>
-                    <button onclick="submitFeedback('plan','good')" class="feedback-btn px-2 py-0.5 rounded text-xs border border-slate-200 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-700 transition" title="Good">Good</button>
-                    <button onclick="submitFeedback('plan','partial')" class="feedback-btn px-2 py-0.5 rounded text-xs border border-slate-200 hover:bg-amber-50 hover:border-amber-300 hover:text-amber-700 transition" title="Partial">Partial</button>
-                    <button onclick="submitFeedback('plan','bad')" class="feedback-btn px-2 py-0.5 rounded text-xs border border-slate-200 hover:bg-red-50 hover:border-red-300 hover:text-red-700 transition" title="Bad">Bad</button>
+                    <button onclick="event.stopPropagation();submitFeedback('plan','good')" class="feedback-btn px-2 py-0.5 rounded text-xs border border-slate-200 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-700 transition" title="Good">Good</button>
+                    <button onclick="event.stopPropagation();submitFeedback('plan','partial')" class="feedback-btn px-2 py-0.5 rounded text-xs border border-slate-200 hover:bg-amber-50 hover:border-amber-300 hover:text-amber-700 transition" title="Partial">Partial</button>
+                    <button onclick="event.stopPropagation();submitFeedback('plan','bad')" class="feedback-btn px-2 py-0.5 rounded text-xs border border-slate-200 hover:bg-red-50 hover:border-red-300 hover:text-red-700 transition" title="Bad">Bad</button>
+                  </div>
+                </summary>
+                <div class="collapsible-body px-4 py-3">
+                  <div id="plan-section" class="min-w-0">
+                    <!-- Populated by JS -->
                   </div>
                 </div>
-                <div id="plan-section" class="min-w-0">
-                  <!-- Populated by JS -->
-                </div>
-              </div>
+              </details>
 
-              <!-- Divider -->
-              <div id="sql-divider" class="border-t border-slate-200 my-6 hidden"></div>
+              <!-- Hidden spacer kept for JS compatibility -->
+              <div id="sql-divider" class="hidden"></div>
 
-              <!-- SQL Generation Results -->
+              <!-- SQL Generation Results (collapsible) -->
               <div id="sql-section-wrapper" class="hidden">
-                <div class="flex items-center justify-between mb-3">
-                  <h5 class="text-sm font-semibold text-slate-600 uppercase tracking-wide">
-                    Generated SQL
-                  </h5>
-                  <div id="feedback-sql" class="flex items-center gap-1" data-step="sql">
-                    <span class="text-xs text-slate-400 mr-1">Rate:</span>
-                    <button onclick="submitFeedback('sql','good')" class="feedback-btn px-2 py-0.5 rounded text-xs border border-slate-200 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-700 transition" title="Good">Good</button>
-                    <button onclick="submitFeedback('sql','partial')" class="feedback-btn px-2 py-0.5 rounded text-xs border border-slate-200 hover:bg-amber-50 hover:border-amber-300 hover:text-amber-700 transition" title="Partial">Partial</button>
-                    <button onclick="submitFeedback('sql','bad')" class="feedback-btn px-2 py-0.5 rounded text-xs border border-slate-200 hover:bg-red-50 hover:border-red-300 hover:text-red-700 transition" title="Bad">Bad</button>
+                <details open class="collapsible-section mb-4 border border-slate-200 rounded-lg overflow-hidden">
+                  <summary class="flex items-center justify-between px-4 py-2.5 bg-slate-50 cursor-pointer hover:bg-slate-100 transition select-none">
+                    <h5 class="text-sm font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-2">
+                      <span class="collapse-arrow">&#9654;</span>
+                      Generated SQL
+                    </h5>
+                    <div id="feedback-sql" class="flex items-center gap-1" data-step="sql" onclick="event.stopPropagation()">
+                      <span class="text-xs text-slate-400 mr-1">Rate:</span>
+                      <button onclick="event.stopPropagation();submitFeedback('sql','good')" class="feedback-btn px-2 py-0.5 rounded text-xs border border-slate-200 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-700 transition" title="Good">Good</button>
+                      <button onclick="event.stopPropagation();submitFeedback('sql','partial')" class="feedback-btn px-2 py-0.5 rounded text-xs border border-slate-200 hover:bg-amber-50 hover:border-amber-300 hover:text-amber-700 transition" title="Partial">Partial</button>
+                      <button onclick="event.stopPropagation();submitFeedback('sql','bad')" class="feedback-btn px-2 py-0.5 rounded text-xs border border-slate-200 hover:bg-red-50 hover:border-red-300 hover:text-red-700 transition" title="Bad">Bad</button>
+                    </div>
+                  </summary>
+                  <div class="collapsible-body px-4 py-3">
+                    <div id="sql-section" class="min-w-0">
+                      <!-- Populated by JS -->
+                    </div>
                   </div>
-                </div>
-                <div id="sql-section" class="min-w-0">
-                  <!-- Populated by JS -->
-                </div>
+                </details>
               </div>
 
-              <!-- Execution Results -->
+              <!-- Execution Results (collapsible) -->
               <div id="exec-section-wrapper" class="hidden">
-                <div class="border-t border-slate-200 my-6"></div>
-                <h5 class="text-sm font-semibold text-slate-600 uppercase tracking-wide mb-3">
-                  Execution Results
-                </h5>
-                <div id="exec-section" class="min-w-0">
-                  <!-- Populated by JS -->
-                </div>
+                <details open class="collapsible-section mb-4 border border-slate-200 rounded-lg overflow-hidden">
+                  <summary class="flex items-center justify-between px-4 py-2.5 bg-slate-50 cursor-pointer hover:bg-slate-100 transition select-none">
+                    <h5 class="text-sm font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-2">
+                      <span class="collapse-arrow">&#9654;</span>
+                      Execution Results
+                    </h5>
+                  </summary>
+                  <div class="collapsible-body px-4 py-3">
+                    <div id="exec-section" class="min-w-0">
+                      <!-- Populated by JS -->
+                    </div>
+                  </div>
+                </details>
               </div>
             </div>
 
             <!-- Plain-text view (hidden, matches notebook _format_plan output) -->
             <div id="plain-view" class="hidden">
-              <div class="mb-6">
-                <h5 class="text-sm font-semibold text-slate-600 uppercase tracking-wide mb-3">
-                  Extracted Keywords
-                </h5>
-                <pre id="plain-keywords" class="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs text-slate-700 font-mono whitespace-pre-wrap leading-relaxed max-h-[24rem] overflow-y-auto"></pre>
-              </div>
-              <div class="border-t border-slate-200 my-6"></div>
-              <div>
-                <h5 class="text-sm font-semibold text-slate-600 uppercase tracking-wide mb-3">
-                  SQL Ingestion Plan
-                </h5>
-                <pre id="plain-plan" class="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs text-slate-700 font-mono whitespace-pre-wrap leading-relaxed max-h-[32rem] overflow-y-auto"></pre>
-              </div>
-              <div id="plain-sql-wrapper" class="hidden">
-                <div class="border-t border-slate-200 my-6"></div>
-                <div>
-                  <h5 class="text-sm font-semibold text-slate-600 uppercase tracking-wide mb-3">
-                    Generated SQL
+              <details open class="collapsible-section mb-4 border border-slate-200 rounded-lg overflow-hidden">
+                <summary class="flex items-center px-4 py-2.5 bg-slate-50 cursor-pointer hover:bg-slate-100 transition select-none">
+                  <h5 class="text-sm font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-2">
+                    <span class="collapse-arrow">&#9654;</span>
+                    Extracted Keywords
                   </h5>
-                  <pre id="plain-sql" class="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs text-slate-700 font-mono whitespace-pre-wrap leading-relaxed max-h-[32rem] overflow-y-auto"></pre>
+                </summary>
+                <div class="collapsible-body px-4 py-3">
+                  <pre id="plain-keywords" class="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs text-slate-700 font-mono whitespace-pre-wrap leading-relaxed max-h-[24rem] overflow-y-auto"></pre>
                 </div>
+              </details>
+
+              <details open class="collapsible-section mb-4 border border-slate-200 rounded-lg overflow-hidden">
+                <summary class="flex items-center px-4 py-2.5 bg-slate-50 cursor-pointer hover:bg-slate-100 transition select-none">
+                  <h5 class="text-sm font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-2">
+                    <span class="collapse-arrow">&#9654;</span>
+                    SQL Ingestion Plan
+                  </h5>
+                </summary>
+                <div class="collapsible-body px-4 py-3">
+                  <pre id="plain-plan" class="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs text-slate-700 font-mono whitespace-pre-wrap leading-relaxed max-h-[32rem] overflow-y-auto"></pre>
+                </div>
+              </details>
+
+              <div id="plain-sql-wrapper" class="hidden">
+                <details open class="collapsible-section mb-4 border border-slate-200 rounded-lg overflow-hidden">
+                  <summary class="flex items-center px-4 py-2.5 bg-slate-50 cursor-pointer hover:bg-slate-100 transition select-none">
+                    <h5 class="text-sm font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-2">
+                      <span class="collapse-arrow">&#9654;</span>
+                      Generated SQL
+                    </h5>
+                  </summary>
+                  <div class="collapsible-body px-4 py-3">
+                    <pre id="plain-sql" class="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs text-slate-700 font-mono whitespace-pre-wrap leading-relaxed max-h-[32rem] overflow-y-auto"></pre>
+                  </div>
+                </details>
               </div>
             </div>
           </div>
@@ -2684,6 +2743,18 @@
         }
       }
 
+      let _allCollapsed = false;
+      function toggleAllSections() {
+        const btn = document.getElementById("collapse-all-toggle");
+        const sections = document.querySelectorAll("#analysis-results .collapsible-section");
+        _allCollapsed = !_allCollapsed;
+        sections.forEach(d => {
+          if (_allCollapsed) d.removeAttribute("open");
+          else d.setAttribute("open", "");
+        });
+        btn.textContent = _allCollapsed ? "Expand All" : "Collapse All";
+      }
+
       // Colour palette per entity group
       const ENTITY_COLOURS = {
         policy:               "bg-indigo-100 text-indigo-700",
@@ -3221,6 +3292,10 @@
         document.getElementById("rich-view").classList.remove("hidden");
         document.getElementById("plain-view").classList.add("hidden");
         document.getElementById("view-toggle").textContent = "Plain Text";
+        // Reset collapsible sections to expanded
+        _allCollapsed = false;
+        document.getElementById("collapse-all-toggle").textContent = "Collapse All";
+        document.querySelectorAll("#analysis-results .collapsible-section").forEach(d => d.setAttribute("open", ""));
         const fileInput = document.getElementById("policy-file");
         if (fileInput) fileInput.value = "";
       }
