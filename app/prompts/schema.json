@@ -32,7 +32,7 @@
       "id": "lower-kebab-case slug (e.g. 'acme-manufacturing')",
       "name": "full legal/common company name (e.g. 'Acme Manufacturing Co.')",
       "code": "short internal code, DISTINCT from name (e.g. 'ACME')",
-      "active": "1 = active, 0 = inactive"
+      "active": "TRUE = active, FALSE = inactive (boolean column — use TRUE/FALSE, not 1/0)"
     },
     "primary_key": [
       "id"

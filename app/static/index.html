@@ -113,7 +113,7 @@
               <h1 class="text-xl font-bold">The Fair Play Initiative</h1>
               <p class="text-xs text-slate-400">
                 Balanced Attendance Management
-                <span class="ml-2 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.9.3</span>
+                <span class="ml-2 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.9.4</span>
                 <span id="playground-badge" class="ml-1 bg-amber-500 text-amber-50 text-xs font-mono px-1.5 py-0.5 rounded hidden">Playground</span>
               </p>
             </div>
@@ -2782,17 +2782,23 @@
                 .map((term) => `<span class="inline-block ${colour} text-xs px-2 py-1 rounded-full">${term}</span>`)
                 .join("")}</div>`;
             } else {
-              content = `<div class="space-y-1">${items
-                .map((term) => {
-                  if (term.length <= CHIP_THRESHOLD) {
-                    return `<span class="inline-block ${colour} text-xs px-2 py-1 rounded-full">${term}</span>`;
-                  }
-                  return `<div class="flex items-start gap-1.5 text-xs">
+              const chips = items.filter((t) => t.length <= CHIP_THRESHOLD);
+              const bullets = items.filter((t) => t.length > CHIP_THRESHOLD);
+              let parts = [];
+              if (chips.length > 0) {
+                parts.push(`<div class="flex flex-wrap gap-1.5">${chips
+                  .map((term) => `<span class="inline-block ${colour} text-xs px-2 py-1 rounded-full">${term}</span>`)
+                  .join("")}</div>`);
+              }
+              if (bullets.length > 0) {
+                parts.push(`<div class="space-y-1${chips.length > 0 ? ' mt-2' : ''}">${bullets
+                  .map((term) => `<div class="flex items-start gap-1.5 text-xs">
                     <span class="mt-1 w-1.5 h-1.5 rounded-full ${colour.replace('text-', 'bg-').split(' ')[0]} shrink-0"></span>
                     <span class="text-slate-600">${term}</span>
-                  </div>`;
-                })
-                .join("")}</div>`;
+                  </div>`)
+                  .join("")}</div>`);
+              }
+              content = parts.join("");
             }
 
             return `
