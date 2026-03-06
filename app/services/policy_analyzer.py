@@ -561,18 +561,6 @@ def _rewrite_sqlite_to_pg(sql: str) -> str:
         flags=re.IGNORECASE | re.DOTALL,
     )
 
-    # Integer booleans → PostgreSQL TRUE/FALSE
-    # Matches standalone 1/0 inside VALUES parentheses (not part of larger numbers)
-    def _fix_int_bools(m: re.Match) -> str:
-        vals = m.group(1)
-        vals = re.sub(r"(?<![0-9]),\s*1\s*\)", ", TRUE)", vals)
-        vals = re.sub(r"(?<![0-9]),\s*0\s*\)", ", FALSE)", vals)
-        vals = re.sub(r"(?<![0-9]),\s*1\s*,", ", TRUE,", vals)
-        vals = re.sub(r"(?<![0-9]),\s*0\s*,", ", FALSE,", vals)
-        return f"VALUES {vals}"
-
-    sql = re.sub(r"VALUES\s*(\([^)]+\))", _fix_int_bools, sql, flags=re.IGNORECASE)
-
     return sql
 
 
