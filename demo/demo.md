@@ -26,41 +26,44 @@
 - **Compliance:** Every pipeline step produces a reviewable artifact. Human ratings (Good / Partial / Bad) are persisted per step. Token usage, latency, and model identity logged to `AnalysisLog` for full traceability.
 - **Cost:** Target under $0.05 per policy analysis (~$0.01–0.03 actual; as low as ~$0.005 with gemini-3-flash). No fine-tuned models — only prompt engineering, prompt distillation, and few-shot examples to maintain iteration speed and cost predictability.
 
-### Template 1: Supervised Pipeline *(High Control, Low Agency)*
+### Iteration 1: Transparent Extraction Pipeline *(Black Box → Decomposed)*
 
-- HR uploads a policy PDF/DOCX (or pastes text) to the system
-- LLM extracts keywords mapped to 8 database schema categories
-- LLM reconciles extracted entities against existing DB records (catches typos, abbreviations, name variations; flags date overlaps and duplicate policies)
-- LLM generates a structured ingestion plan using matched IDs (table-by-table INSERT steps, rule rows, confidence scores)
-- Human reviews extraction, reconciliation warnings, AND plan — rates each step (Good / Partial / Bad)
-- Human explicitly approves execution — SQL runs in sandbox only
-- System tracks what was extracted, reconciled, planned, and executed for every document
+- HR admin uploads a policy PDF/DOCX (or pastes text) to the system
+- The LLM extracts keywords, generates a structured ingestion plan, and produces SQL — each as a separate, reviewable step
+- HR reviews every step, rates each (Good / Partial / Bad), approves or rejects
+- The system executes SQL only after human approval, in playground sandbox only
+- Initially used GPT-5-mini — single-shot pipeline took 3–5 minutes per call with no way to swap models
+- RAG evaluation: tested retrieval-augmented generation but found 97.3% of the document was retrieved — pure overhead for single-document extraction; full-text input used instead
+- Arize AX observability added for tracing all LLM nodes
 
-### Template 2: Confidence-Routed Pipeline *(Medium Control, Medium Agency)*
+### Iteration 2: Database-Aware Reconciliation *(Stateful Pipeline)*
 
-- LLM extracts and plans as before
-- High-confidence steps (>90%) auto-approve — human sees a summary dashboard
-- Low-confidence steps get flagged for human review
-- Model comparison data (per-step ratings aggregated across runs) informs which models earn auto-approval
-- Human focuses on exceptions, not routine
+- LLM extracts and reconciles entities against existing DB records (catches typos, abbreviations, name variations)
+- Deterministic conflict detection runs automatically (date overlaps, active-policy overwrites)
+- Matched IDs flow downstream so plan and SQL reuse existing records instead of creating duplicates
+- Human reviews flagged conflicts and reconciliation warnings before execution
+- Per-step model configurators added to playground UI — discovered gemini-3-flash runs in a fraction of the time/cost vs GPT-5-mini
+- Observability moved from external Arize AX into the UI — token badges, cost/latency per step, feedback ratings all visible inline
+- Analytics persistence to Supabase PostgreSQL (replaces external logging)
 
-### Template 3: Autonomous Policy Lifecycle *(Low Control, High Agency)*
+### Iteration 3: Prompt Caching *(Cost Optimization at Scale)*
 
-- LLM reads incoming policy revisions, diffs against existing rules
-- Agent reasons over changes and updates the rule database autonomously
-- Sends structured audit reports — what changed, why, confidence level
-- Proactively detects rule drift (policy says X, database says Y) and flags anomalies
-- Humans handle edge cases only — unusual documents, ambiguous language, cross-jurisdictional conflicts
+- OpenRouter prompt caching enabled across all LLM nodes — reuses cached system prompts, schema context, and planning guidance
+- Cache hits on Plan and SQL steps reduce redundant token processing for repeated runs
+- Lower per-run cost makes higher-volume batch processing economically viable
+- Infrastructure step toward autonomous policy lifecycle (policy diffs, drift detection, audit reports)
 
 ---
 
 ## ITERATION TABLE
 
+*Live production data from 71 analysis runs across 9 models (Supabase PostgreSQL)*
+
 | Itr | Cost / Latency Factors | Optimizations | Guardrails | Eval Metrics |
 |-----|----------------------|---------------|------------|--------------|
-| **1** | 1 LLM call per document (single-shot extraction + SQL) | Meta-prompting, schema-aware structured output (Pydantic) | Human reviews 100% of outputs; playground-only execution | Keyword accuracy, SQL syntax validity, confidence score |
-| **2** | 3 LLM calls per document (extract → plan → generate SQL); heterogeneous model routing; **Extract:** ~3s/2.2K tok (gemini-3.1-flash-lite), ~5s/2.8K tok (gemini-3-flash), ~63s/4.8K tok (gpt-5-mini); **Plan:** ~7s/8.6K tok (gemini-3.1-flash-lite), ~16s/9K tok (gemini-3-flash), ~124s/13.7K tok (gpt-5-mini); **SQL:** ~6s/7.5K tok (gemini-3-flash), ~68s/11.3K tok (gpt-5-mini) | Prompt distillation (Sonnet 4.6 → gpt-5-mini → gemini-3-flash); per-step model selectors; structured plan as verification gate | Human review at plan stage; rule exclusion guardrails (8 categories); expected rule count bounds (10–30); confidence deduction rubric | Rule count vs. expected, plan–SQL alignment, per-step human ratings, token usage per model per step |
-| **3** | 4 LLM calls (extract + reconcile + plan + SQL); **Full pipeline:** ~31s/~21K tokens (gemini-3-flash), ~258s/~31K tokens (gpt-5-mini), ~$0.01–0.03 per policy; entity reconciliation adds ~1 call when DB has existing records (zero-cost pass-through on empty DB); **43 production runs across 7+ models** (Gemini, GPT, Claude, DeepSeek, Mistral) | Feedback loop: human ratings → model comparison → confidence thresholds; **Entity reconciliation:** LLM fuzzy-matches extracted orgs/policies/regions against existing DB records (handles typos, abbreviations, name variations); deterministic conflict detection (date overlaps, active-policy overwrites); matched IDs flow downstream so plan/SQL reuse existing records instead of creating duplicates | Auto-approve >90% confidence; flag low-confidence for HTL; playground/production mode isolation; rollback on SQL failure; reconciliation gate (0.7 confidence threshold for ID reuse); conflict warnings surfaced before execution | End-to-end success rate, model rating % (good/partial/bad), time-to-ingest, cost per policy, entity match accuracy, conflict detection rate |
+| **1** | 3 LLM calls per document (Extract → Plan → SQL); started with GPT-5-mini (~3–5 min/call); ~19K tokens | Meta-prompting, prompt distillation (Sonnet → gemini-flash), RAG evaluation (negative result — full-text beats retrieval), Arize AX observability | Human reviews 100%; rule exclusion guardrails (8 categories) | Keyword accuracy, plan–SQL alignment, per-step ratings |
+| **2** | 4 LLM calls per document (+ reconciliation); ~31s with gemini-3-flash (down from ~3–5 min), ~21K tokens, ~$0.01–0.03/policy | Entity reconciliation (fuzzy matching), deterministic conflict detection, per-step model configurators (discovered gemini-flash = fraction of time/cost), analytics persistence | Playground/production isolation (AI-generated SQL sandboxed), reconciliation gate (0.7 confidence), conflict warnings, rollback on failure | Entity match accuracy, conflict detection rate, model rating % |
+| **3** | 4 LLM calls + prompt caching on Plan/SQL steps; 23.5K tokens served from cache (5.5% of 427K total) | OpenRouter cache headers, cached prompt prefixes, batch processing | Same as Itr 2 | Cache hit rate, tokens saved, cost per policy |
 
 ---
 
@@ -70,9 +73,9 @@ The experiment iterations (what we built) directly enable the trust phases (how 
 
 | Experiment Work | What It Built | Trust Phase It Enables |
 |----------------|--------------|----------------------|
-| **Itr 1:** Single-shot pipeline, litellm + instructor | Baseline extraction, confidence scoring, playground sandbox | **Phase 1 (Hands-On):** Human reviews everything, rates every step, system builds reliability baseline |
-| **Itr 2:** Decomposed pipeline (Extract → Plan → SQL), prompt distillation, model routing, Arize AX observability | Reviewable plan as verification gate, per-step model selectors, human feedback collection, token/cost tracking | **Phase 1→2 transition:** Feedback data accumulates; humans can compare model quality; plan step becomes the human checkpoint |
-| **Itr 3:** Entity reconciliation (fuzzy org/policy matching against existing DB), conflict detection (date overlaps, active-policy overwrites), rule exclusion guardrails, confidence deduction rubric, RAG evaluation (negative result), rule quality audit | Database-aware pipeline that prevents duplicate entities, automated quality checks, model rating aggregation, guardrails that catch over-generation and data conflicts before human sees them | **Phase 2 (Building Trust):** High-confidence auto-approves; human reviews flagged items only; system proves itself through accumulated ratings; entity reconciliation prevents silent data corruption |
+| **Itr 1:** Single-shot → decomposed pipeline (Extract → Plan → SQL), started with GPT-5-mini (3–5 min/call), prompt distillation, Arize AX observability, RAG evaluation (negative result) | Reviewable plan as verification gate, human feedback collection, token/cost tracking | **Phase 1 (Hands-On):** Human reviews everything, rates every step, system builds reliability baseline; feedback data accumulates for model comparison |
+| **Itr 2:** Entity reconciliation (fuzzy org/policy matching against existing DB), conflict detection (date overlaps, active-policy overwrites), rule exclusion guardrails, confidence deduction rubric, playground/production isolation, per-step model configurators (discovered gemini-flash), enhanced annotations, analytics persistence | Database-aware pipeline that prevents duplicate entities, automated quality checks, model rating aggregation, per-step model comparison (GPT-5-mini → gemini-flash = fraction of time/cost), guardrails that catch data conflicts before human sees them | **Phase 2 (Building Trust):** High-confidence auto-approves; human reviews flagged items only; entity reconciliation prevents silent data corruption |
+| **Itr 3:** Prompt caching across all LLM nodes, cache hit/write UI badges, cache metrics in analytics DB | Reduced redundant token processing for repeated runs; cost tracking infrastructure for cache savings | **Phase 2→3 transition:** Lower per-run cost makes higher-volume autonomous processing economically viable |
 | **Future:** Policy diff detection, drift monitoring, batch processing | Autonomous policy lifecycle management | **Phase 3 (Autonomous):** Routine work flows through automatically; humans handle exceptions only |
 
 ---
@@ -153,7 +156,7 @@ This data is what makes the Phase 1 → Phase 2 transition possible: when a mode
 
 ### Decomposition Strategy (proven technique)
 
-Iteration 1 produced a single-shot black box — one LLM call that went from raw document to SQL in a single step. The output was impossible to verify: you could see the final SQL, but you had no way to know *why* the AI chose those tables, joins, or values.
+Iteration 1 started as a single-shot black box — one LLM call that went from raw document to SQL. The output was impossible to verify: you could see the final SQL, but you had no way to know *why* the AI chose those tables, joins, or values.
 
 **The fix: step-by-step decomposition into 3 transparent stages.**
 
@@ -170,14 +173,14 @@ Iteration 1 produced a single-shot black box — one LLM call that went from raw
 3. **The Plan step is the human checkpoint** — it separates "what did the AI understand?" from "what code will it generate?"
 4. **Errors are localized** — if the SQL is wrong, you check the Plan. If the Plan is wrong, you check the Extraction. No need to debug a monolithic prompt.
 
-This decomposition is what enabled every subsequent optimization: prompt distillation (below), per-step feedback, model comparison, and the trust lifecycle.
+This decomposition is what enabled every subsequent optimization: prompt distillation, per-step feedback, model comparison, and the trust lifecycle.
 
 ### Prompt Distillation (proven technique)
 
 - Run a strong model (Claude Sonnet 4.6) once on the planning step — 36s, 12,164 tokens, confidence 0.87
 - Extract the 6 structural reasoning patterns it discovered (INSERT order, ID chaining, rule granularity, value derivation, natural keys, existence checks)
 - Encode those patterns as explicit guidance in cheaper models' system prompts
-- Result: gemini-3-flash achieves same quality at ~40x cost reduction (16s, 9K tok, ~$0.003/run); gemini-3.1-flash-lite at ~120x reduction (7s, 8.6K tok, ~$0.001/run). No fine-tuning, no training data, instantly reversible
+- Result: gemini-3-flash achieves same quality at ~40x cost reduction (15s, 8.3K tok, ~$0.003/run); gemini-3.1-flash-lite at ~120x reduction (7s, 8.6K tok, ~$0.001/run). No fine-tuning, no training data, instantly reversible
 
 ---
 
@@ -195,7 +198,9 @@ This decomposition is what enabled every subsequent optimization: prompt distill
 
 6. **The feedback loop closes the circle.** Human ratings → model comparison → confidence thresholds → progressive autonomy. Without the ratings infrastructure, there's no path from Phase 1 to Phase 3.
 
-7. **Stateless pipelines corrupt shared databases.** An AI pipeline that doesn't know what's already in the database will silently create duplicates. Entity reconciliation — using the LLM's semantic understanding to match "ACMI Manufacturing Co" to "Acme Manufacturing Corporation" — is not optional for production use. Deterministic checks (date overlaps, active-policy collisions) catch what the LLM doesn't need to.
+7. **Stateless pipelines corrupt shared databases.** An AI pipeline that doesn't know what's already in the database will silently create duplicates. Entity reconciliation — using the LLM's semantic understanding to match "ACMI Manufacturing Co" to "Acme Manufacturing Corporation" — is not optional for production use.
+
+8. **LLMs fill blanks, they don't flag them.** When a source document is missing metadata (company name, region, effective date), the model fabricates plausible values instead of reporting the gap. Extraction prompts need explicit absence handling — instructions for what to do when data is *not there*, not just when it is. Without this, hallucinated dates, company names, or regions silently corrupt the database with realistic-looking but invented data.
 
 ---
 

@@ -49,6 +49,13 @@ VALUE QUALITY
     - If you can infer a reasonable value from context (e.g. US company → 'America/New_York'), use it.
     - If the value truly cannot be determined, use NULL (not a placeholder string).
 
+  MISSING METADATA — If the plan marks a value as "[not in document]":
+    - For organization.name: use 'Unknown Organization' (not a made-up company name).
+    - For region.name: use 'Unknown Region' (not a made-up location).
+    - For policy.effective_date: use the current date.
+    - For organization.code / region.code: derive from 'unknown' (e.g. 'UNK', 'UNK-REGION').
+    - NEVER fabricate realistic-sounding names, locations, or dates that were not in the source document.
+
   FIELD SEMANTICS
     - region.code: short alphanumeric identifier (e.g. 'US-EAST', 'EU-DE', 'APAC-SG') — NOT the same as region.name.
     - region.name: human-readable label (e.g. 'US East Coast', 'Germany').

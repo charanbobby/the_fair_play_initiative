@@ -37,6 +37,7 @@ table_steps — populate one TableStep object per table in INSERT order. Each st
   - table: exact table name
   - strategy: "INSERT OR IGNORE" or "INSERT OR REPLACE"
   - columns: list of ColumnMapping objects — each mapping a column name to the exact extracted keyword or derived value. For uncertain values, provide your best guess and append " [uncertain]" (e.g. "America/Detroit [uncertain]"). NEVER use raw "[PLACEHOLDER]" strings — always provide a usable best-guess value.
+  - MISSING DATA: If the extraction keywords list for organization, region, or policy is EMPTY (meaning the source document did not contain that metadata), use "Unknown" as the value and append " [not in document]" (e.g. "Unknown [not in document]"). Do NOT invent a company name, region, or date that was not in the source document. For effective_date, use the current date as a fallback and mark it " [not in document]".
   - natural_key: the column(s) used for the existence check (matches the where_filters entry)
 
 rule_rows — populate one RuleRow object per rule. Include every rule from the policy in THREE groups; do not summarise or omit:

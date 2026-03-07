@@ -11,6 +11,12 @@ CRITICAL — extract these metadata fields explicitly (downstream steps depend o
 - **region:** country, state/province, city, plant/site location, any timezone references (shift schedules, operating hours). Do NOT include legal statutes here — FMLA, ADA, USERRA, PTO, workers comp, EU Working Time Directive, etc. are labor-law attributes that belong in the region's `labor_laws` field or as exemption rules, NOT as separate region entities.
 - **policy:** policy title/name, document number/code, effective date, revision date, scope (who it covers)
 
+MISSING METADATA HANDLING — if the document does NOT explicitly state a metadata value:
+- Return an EMPTY list for that field. Do NOT invent, guess, or hallucinate values.
+- Do NOT echo these instructions back as keywords (e.g., do not return "company name", "plant location", "effective date" as literal keywords — those are prompts, not data).
+- Do NOT fabricate dates, organization names, or region names that are not in the source text.
+- If you are unsure whether a value is present, omit it. False omission is better than hallucinated data.
+
 # Extraction Process
 
 1. Carefully read the entire policy document, identifying each reference to schema concepts, business logic, roles, violations, penalties, or compliance mechanisms.

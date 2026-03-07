@@ -26,206 +26,190 @@
 - **Compliance:** Every step produces a reviewable artifact. Human ratings persisted per step. Token usage, latency, model identity logged for traceability.
 - **Cost:** Target < $0.05 per policy (~$0.01–0.03 actual; as low as ~$0.005 with gemini-3-flash). No fine-tuned models — prompt engineering + distillation only.
 
-### Template 1: Supervised Pipeline *(High Control, Low Agency)*
+### Iteration 1: Transparent Extraction Pipeline *(Black Box → Decomposed)*
 
-Upload → LLM extracts → LLM plans → Human reviews & rates every step → Human approves → SQL runs in sandbox
+- HR admin uploads a policy PDF/DOCX (or pastes text) to the system
+- The LLM extracts keywords, generates a structured ingestion plan, and produces SQL — each as a separate, reviewable step
+- HR reviews every step, rates each (Good / Partial / Bad), approves or rejects
+- The system executes SQL only after human approval, in playground sandbox only
+- Initially used GPT-5-mini — single-shot pipeline took 3–5 minutes per call with no way to swap models
+- RAG evaluation: tested retrieval-augmented generation but found 97.3% of the document was retrieved — pure overhead for single-document extraction; full-text input used instead
 
-### Template 2: Confidence-Routed Pipeline *(Medium Control, Medium Agency)*
+### Iteration 2: Database-Aware Reconciliation *(Stateful Pipeline)*
 
-Same pipeline → High-confidence (>90%) auto-approves → Human reviews flagged items only
+- LLM extracts and reconciles entities against existing DB records (catches typos, abbreviations, name variations)
+- Deterministic conflict detection runs automatically (date overlaps, active-policy overwrites)
+- Matched IDs flow downstream so plan and SQL reuse existing records instead of creating duplicates
+- Human reviews flagged conflicts and reconciliation warnings before execution
+- Per-step model configurators added to playground UI — swap models per step to compare quality/cost
+- Observability moved from external Arize AX into the UI — token badges, cost/latency per step, feedback ratings all visible inline
+- Analytics persistence to Supabase PostgreSQL (replaces external logging)
 
-### Template 3: Autonomous Policy Lifecycle *(Low Control, High Agency)*
+### Iteration 3: Prompt Caching *(Cost Optimization at Scale)*
 
-LLM reads policy revisions → diffs against existing rules → updates autonomously → sends audit reports → flags drift
+- OpenRouter prompt caching enabled across all LLM nodes — reuses cached system prompts, schema context, and planning guidance
+- Cache hits on Plan and SQL steps reduce redundant token processing for repeated runs
+- Lower per-run cost makes higher-volume batch processing economically viable
+- Infrastructure step toward autonomous policy lifecycle (policy diffs, drift detection, audit reports)
 
 ---
 
 ## ITERATION TABLE
 
-*Live production data from 43 analysis runs across 7+ models (Supabase PostgreSQL)*
+*Live production data from 71 analysis runs across 9 models (Supabase PostgreSQL)*
 
-| Itr | Cost / Latency | Optimizations | Guardrails | Eval Metrics |
-|-----|---------------|---------------|------------|--------------|
-| **1** | 1 LLM call; single-shot extract+SQL; **black box** — opaque SQL, hard to verify what the AI decided | Meta-prompting (ChatGPT Playground, multi-shot samples) to define structured output shape + SQL plan templates; Pydantic models via `litellm + instructor` | Human reviews 100%; playground-only | Keyword accuracy, SQL validity, confidence |
-| **2** | 3 LLM calls — **decomposed because Itr 1 was a black box** (opaque SQL, no way to verify AI reasoning); **Extract:** ~3s/2.2K tok (gemini-3.1-flash-lite), ~5s/2.8K tok (gemini-3-flash), ~63s/4.8K tok (gpt-5-mini); **Plan:** ~7s/8.6K tok (gemini-3.1-flash-lite), ~16s/9K tok (gemini-3-flash), ~124s/13.7K tok (gpt-5-mini); **SQL:** ~6s/7.5K tok (gemini-3-flash), ~68s/11.3K tok (gpt-5-mini) | Prompt distillation (Sonnet 4.6 → gpt-5-mini); per-step model selectors; **plan as verification gate**; **RAG experiment (negative result):** ChromaDB retrieval retrieved 97.3% of document (20/26 chunks), added 1.8x latency (584.8s vs 316.7s) and +80% tokens (64.6K vs 36K) — pure overhead for single-document exhaustive extraction. Full-text input is the right approach here; RAG adds value only for multi-document querying. | Human review at plan stage; rule exclusion guardrails (8 categories); rule count bounds (10–30); confidence deduction rubric | Rule count vs expected, plan–SQL alignment, per-step ratings, tokens per model per step |
-| **3** | 4 calls (+ reconciliation); **Full pipeline:** ~31s/~21K tokens (gemini-3-flash), ~258s/~31K tokens (gpt-5-mini), ~$0.01–0.03 per policy | Feedback loop: human ratings → model comparison → confidence thresholds; **Entity reconciliation:** LLM-powered fuzzy matching of orgs/policies/regions against existing DB records (handles typos, abbreviations, name variations); deterministic conflict detection (date overlaps, active-policy overwrites); **Prompt refinement:** killed `[PLACEHOLDER]` passthrough, few-shot SQL example, field semantics, self-validation checklist; **Multi-model evaluation:** 7+ models tested (Gemini, GPT, Claude, DeepSeek, Mistral) | Rule exclusion guardrails; confidence deduction rubric; playground/production mode isolation; rollback on SQL failure; entity reconciliation gate (0.7 confidence threshold); conflict warnings before execution | Model rating %, cost per policy, time-to-ingest, placeholder leak rate (0%), entity match accuracy, false-positive rate |
+| Itr | Cost / Latency Factors | Optimizations | Guardrails | Eval Metrics |
+|-----|----------------------|---------------|------------|--------------|
+| **1** | 3 LLM calls per document (Extract → Plan → SQL); started with GPT-5-mini (~3–5 min/call); ~19K tokens | Meta-prompting, prompt distillation (Sonnet → gemini-flash), RAG evaluation (negative result — full-text beats retrieval) | Human reviews 100%; rule exclusion guardrails (8 categories) | Keyword accuracy, plan–SQL alignment, per-step ratings |
+| **2** | 4 LLM calls per document (+ reconciliation); ~31s with gemini-3-flash (down from ~3–5 min), ~21K tokens, ~$0.01–0.03/policy | Entity reconciliation (fuzzy matching), deterministic conflict detection, per-step model configurators (discovered gemini-flash = fraction of time/cost), analytics persistence | Playground/production isolation (AI-generated SQL sandboxed), reconciliation gate (0.7 confidence), conflict warnings, rollback on failure | Entity match accuracy, conflict detection rate, model rating % |
+| **3** | 4 LLM calls + prompt caching on Plan/SQL steps; 23.5K tokens served from cache (5.5% of 427K total) | OpenRouter cache headers, cached prompt prefixes, batch processing | Same as Itr 2 | Cache hit rate, tokens saved, cost per policy |
 
-### Production Model Stats (from Supabase `analysis_logs` — 43 runs, 7+ models)
+### Production Stats (from Supabase `analysis_logs` — 71 runs, 9 models)
 
 | Step | Model | Runs | Avg Tokens | Avg Latency | Feedback |
 |------|-------|------|-----------|-------------|----------|
-| Extract | gemini-3-flash | 4 | 2,813 | 4.9s | 3 Good, 1 Bad |
+| Extract | gemini-3-flash | 11 | 2,160 | 4.9s | 5 Good, 1 Bad |
 | Extract | gemini-3.1-flash-lite | 4 | 2,236 | 3.3s | 3 Good |
 | Extract | gpt-5-mini | 5 | 4,787 | 63.3s | 4 Good |
 | Plan | claude-sonnet-4.6 | 1 | 12,164 | 36.1s | — |
 | Plan | deepseek-v3.2 | 1 | 15,106 | 112.8s | 1 Good |
-| Plan | gemini-3-flash | 5 | 8,998 | 15.7s | 2 Good |
+| Plan | gemini-3-flash | 12 | 8,339 | 15.4s | 2 Good |
 | Plan | gemini-3.1-flash-lite | 4 | 8,568 | 7.2s | 4 Good, 1 Partial |
 | Plan | gpt-5-mini | 2 | 13,663 | 123.5s | — |
-| Reconcile | gemini-3-flash | 1 | 1,484 | 3.1s | 1 Good |
+| Reconcile | gemini-3-flash | 7 | 1,475 | 3.5s | 3 Good, 1 Bad |
+| Reconcile | gemini-3.1-flash-lite | 1 | 1,559 | 2.4s | — |
 | Reconcile | gpt-4o-mini | 4 | 1,736 | 6.2s | — |
 | Reconcile | gpt-5.4 | 1 | 1,625 | 2.3s | — |
 | SQL | claude-sonnet-4.6 | 1 | 10,601 | 18.8s | — |
-| SQL | gemini-3-flash | 5 | 7,504 | 6.4s | 2 Good |
+| SQL | gemini-3-flash | 11 | 7,424 | 6.8s | 2 Good |
 | SQL | gemini-3.1-flash-lite | 1 | 7,772 | 4.5s | — |
-| SQL | gemini-3.1-pro | 1 | 18,543 | 102.4s | 1 Good |
+| SQL | gemini-3.1-pro | 2 | 14,723 | 79.1s | 1 Good, 1 Bad |
 | SQL | devstral-2512 | 1 | 8,959 | 15.3s | 1 Good |
 | SQL | gpt-5-mini | 2 | 11,284 | 68.3s | — |
+
+### Prompt Caching Results
+
+| Metric | Value |
+|--------|-------|
+| Total runs (all cache-enabled) | 71 |
+| Runs with cache hits | 6 (plan: 3, sql: 3) — only steps with prompts above provider minimum size |
+| Total tokens served from cache | 23,553 |
+| Total tokens processed | 427,039 |
+| Cache hit token ratio | 5.5% |
+| Latency (cache hit vs miss) | Mixed — hit rate expected to improve with higher run volume on same model/step combinations |
 
 ---
 
 ## ITERATION DIAGRAMS
 
-### Iteration 1 — Single-Shot Pipeline (Black Box)
+### Iteration 1 — Decomposed Pipeline *(Black Box → Decomposed)*
 
-**The challenge:** We gave the AI a document and a prompt. It produced SQL that added tables and rules — but validating each table was extremely difficult. The output was a black box: you could see the final SQL, but you had no way to verify *why* the AI chose those tables, joins, or values. No way to catch logic errors before execution.
+```text
+┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
+│              │    │   Step 1:    │    │   Step 2:    │    │   Step 3:    │
+│  Upload      │───▶│   EXTRACT   │───▶│   PLAN       │───▶│   SQL        │
+│  Policy PDF  │    │             │    │             │    │             │
+│              │    │  GPT-5-mini │    │  GPT-5-mini │    │  GPT-5-mini │
+└──────────────┘    │  (~1 min)   │    │  (~2 min)   │    │  (~1 min)   │
+                    └──────┬──────┘    └──────┬──────┘    └──────┬──────┘
+                           │                  │                  │
+                    ┌──────▼──────┐    ┌──────▼──────┐    ┌──────▼──────┐
+                    │   Human     │    │   Human     │    │   Human     │
+                    │   Review    │    │   Review    │    │   Review    │
+                    │   G / P / B │    │   G / P / B │    │   G / P / B │
+                    └──────┬──────┘    └──────┬──────┘    └──────┬──────┘
+                           │                  │                  │
+                           └──────────────────┼──────────────────┘
+                                              │
+                                       ┌──────▼──────┐
+                                       │ Audit Logger│
+                                       │ (Arize AX)  │
+                                       └─────────────┘
 
-**Meta-prompting (ChatGPT Playground):** Used multi-shot samples to define (1) the Pydantic structured output shape (per-table keyword fields), and (2) the human-readable SQL plan template format. Fed multiple example policies to the LLM and iterated on the prompt templates that would later guide extraction and planning.
-
-**This led to the key insight:** we need to decompose the pipeline so the AI shows its reasoning at each step.
-
-```
-┌──────────┐     ┌─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─┐     ┌──────────┐     ┌──────────┐
-│  Upload  │────▶  ██████████████████████ ────▶│  Human   │────▶│ Sandbox  │
-│  Policy  │     │ ██  BLACK BOX  ██████ │     │  Review  │     │ Execute  │
-└──────────┘      ██  1 LLM call  ██████       │          │     └──────────┘
-                 │ ██  Extract+SQL █████ │     │ Can see  │      SQLite only
-                  ██  (opaque)    ██████       │ output,  │
-                 │ ██████████████████████ │     │ can't    │
-                  ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─      │ verify   │
-                  litellm + instructor         │ reasoning│
-                  Pydantic structured output   └──────────┘
-
-  Problem: Human reviews SQL but has no visibility into
-  WHY the AI chose these tables, joins, or values.
-  ──────────────────────────────────────────────────────
-  ➜ Solution: Decompose into 3 transparent steps (Itr 2)
-```
-
-### Decomposition Strategy — The Key Pivot
-
-Iteration 1's black box forced a fundamental rethink. Instead of one monolithic LLM call that goes from document → SQL, we decomposed into **3 transparent stages**, each producing a reviewable artifact:
-
-```
- BEFORE (Itr 1)                          AFTER (Itr 2+)
- ─────────────                           ─────────────
- Document → [BLACK BOX] → SQL            Document → EXTRACT → PLAN → SQL
-                                                      ↓         ↓        ↓
- Human can see output,                          "I found    "I'll    "Here's
- can't verify reasoning                          these"     do this"  the code"
+  Started as 1 LLM call (black box, 3–5 min total) — decomposed
+  into 3 steps because single-shot output was opaque and impossible
+  to verify. No model swapping — locked to GPT-5-mini.
 ```
 
-**Why this works:**
+**Prompt Distillation:**
 
-1. **Each step = reviewable artifact** — no more opaque outputs
-2. **Each step = different model** — expensive where quality matters (Plan), cheap where mechanical (Extract, SQL)
-3. **Plan = human checkpoint** — separates "what did the AI understand?" from "what code will it generate?"
-4. **Errors are localized** — bad SQL? Check the Plan. Bad Plan? Check the Extraction.
-
-This decomposition enabled every subsequent optimization: prompt distillation, per-step feedback, model comparison, and the trust lifecycle.
-
-### Iteration 2 — Decomposed Pipeline (Transparent)
-
-**Why decompose?** Itr 1's black box produced opaque SQL. By splitting into Extract → Plan → SQL, each step produces a **reviewable artifact**. The Plan step is the key — it's a human-readable ingestion plan that a compliance officer can verify before any SQL runs.
-
-**Still challenging:** Even with decomposition, validating each extraction and every SQL rule the AI generates remained difficult. A single policy can produce 20–30 rules across multiple tables — manually checking each one is time-consuming. This drove us to Iteration 3: give the administrator a safe place to actually *run* the output and see the results.
-
-**RAG experiment (negative result):** Tried ChromaDB vector retrieval to replace brute-force text truncation. Result: retrieved 97.3% of the document (20 of 26 chunks), 1.8x slower (584.8s vs 316.7s), +80% more tokens (64.6K vs 36K). For single-document exhaustive extraction, the LLM needs the entire policy — RAG is pure overhead. RAG would add value for cross-policy querying (50+ policies) or when documents exceed the context window.
-
-```
-┌──────────┐     ┌───────────┐     ┌───────────┐     ┌───────────┐
-│  Upload  │────▶│  Step 1   │────▶│  Step 2   │────▶│  Step 3   │
-│  Policy  │     │  EXTRACT  │     │   PLAN    │     │    SQL    │
-│  (PDF/   │     │  "I found │     │  "I'll    │     │  "Here's  │
-│  DOCX/   │     │   these   │     │   do      │     │   the     │
-│  text)   │     │   rules"  │     │   this"   │     │   code"   │
-└──────────┘     │           │     │           │     │           │
-                 │ gemini-3  │     │ gemini-3  │     │ gemini-3  │
-                 │ flash     │     │ flash     │     │ flash     │
-                 │ ~5s       │     │ ~16s      │     │ ~6s       │
-                 │ 2.8K tok  │     │ 9K tok    │     │ 7.5K tok  │
-                 └─────┬─────┘     └─────┬─────┘     └─────┬─────┘
-                       │                 │                  │
-                 ┌─────▼─────┐     ┌─────▼─────┐     ┌─────▼─────┐
-                 │  Human    │     │  Human    │     │  Human    │
-                 │  Rate:    │     │  Rate:    │     │  Rate:    │
-                 │  G / P / B│     │  G / P / B│     │  G / P / B│
-                 └─────┬─────┘     └─────┬─────┘     └─────┬─────┘
-                       │                 │                  │
-                       ▼                 ▼                  ▼
-                 ┌─────────────────────────────────────────────┐
-                 │          AnalysisLog + AnalysisFeedback     │
-                 │  (tokens, latency, model, rating per step)  │
-                 └─────────────────────────────────────────────┘
-
-  Prompt Distillation — cost savings:
-  ┌─────────────────────────────────────────────────────────────┐
-  │  Sonnet 4.6 (plan step):  36s, 12,164 tok, ~$0.12/run     │
-  │  gpt-5-mini (plan step): 124s, 13,663 tok, ~$0.01/run     │
-  │  gemini-3-flash (plan):   16s,  8,998 tok, ~$0.003/run    │
-  │  gemini-3.1-flash-lite:    7s,  8,568 tok, ~$0.001/run    │
-  │                                                             │
-  │  How: Run Sonnet once → extract 6 structural reasoning     │
-  │  patterns (INSERT order, ID chaining, rule granularity,    │
-  │  value derivation, natural keys, existence checks) →       │
-  │  encode as PLANNING GUIDANCE in cheaper model's prompt     │
-  │                                                             │
-  │  Result: ~40–120x cost reduction, same output quality,     │
-  │  no fine-tuning, no training data, instantly reversible    │
-  └─────────────────────────────────────────────────────────────┘
-
-  RAG Experiment (REJECTED):
-  ┌────────────┐     ┌────────────┐     ┌────────────┐
-  │ ChromaDB   │────▶│ Retrieve   │────▶│ Feed to    │
-  │ embed 26   │     │ 20 chunks  │     │ LLM        │
-  │ chunks     │     │ (97.3%)    │     │            │
-  └────────────┘     └────────────┘     └────────────┘
-  Result: 584.8s, 64.6K tokens — 1.8x slower, +80% tokens
-  Reason: exhaustive extraction needs the full document
+```text
+┌───────────────────┐       ┌────────────────────────┐       ┌───────────────────┐
+│  Claude Sonnet    │ gold  │   Extract 6 structural │inject │   gemini-3-flash  │
+│  4.6              │──────▶│   reasoning patterns   │──────▶│   + PLANNING      │
+│  (one-time run)   │ plan  │   (INSERT order, ID    │ into  │   GUIDANCE block  │
+│                   │       │   chaining, rule gran-  │prompt │                   │
+│  36s, 12K tok     │       │   ularity, natural keys)│      │  Same quality,    │
+│  ~$0.12/run       │       │                        │       │  40–120x cheaper  │
+└───────────────────┘       └────────────────────────┘       └───────────────────┘
 ```
 
-### Iteration 3 — Reconciliation + Guardrails *(where we are today)*
+### Iteration 2 — Entity Reconciliation + Guardrails *(Stateful Pipeline)*
 
-**The problem from Itr 2:** Decomposition made the AI's reasoning visible, but two critical gaps remained: (1) validating extracted rules across 20–30 rows was still hard, and (2) the pipeline was stateless — it didn't know what was already in the database. Upload the same company with a slightly different name ("ACMI Manufacturing Co" vs "Acme Manufacturing Corporation") and you get duplicate rows. Upload a policy with the same effective date as an existing one — no warning.
+```text
+┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
+│              │    │   Step 1:    │    │  Step 1b:    │    │   Step 2:    │    │   Step 3:    │
+│  Upload      │───▶│   EXTRACT   │───▶│  RECONCILE   │───▶│   PLAN       │───▶│   SQL        │
+│  Policy PDF  │    │             │    │  (NEW)       │    │             │    │             │
+│              │    │  gemini-3   │    │  gemini-3   │    │  gemini-3   │    │  gemini-3   │
+└──────────────┘    │  flash ~5s  │    │  flash ~4s  │    │  flash ~15s │    │  flash ~7s  │
+                    │  + rule     │    │  fuzzy match │    │  + matched  │    │  + sandbox  │
+                    │  exclusions │    │  vs existing │    │  IDs from   │    │  execution  │
+                    └──────┬──────┘    │  DB records  │    │  reconcile  │    └──────┬──────┘
+                           │           └──────┬──────┘    └──────┬──────┘           │
+                           │           ┌──────▼──────┐          │                  │
+                           │           │  Conflict   │          │                  │
+                           │           │  Detection  │          │                  │
+                           │           │  (date over-│          │                  │
+                           │           │  laps, dupes)│         │                  │
+                           │           └─────────────┘          │                  │
+                           └────────────────────────────────────┼──────────────────┘
+                                                                │
+                                                    ┌───────────▼───────────┐
+                                                    │  Human-in-the-Loop   │
+                                                    │  Approval            │
+                                                    │  + Model Selectors   │
+                                                    └───────────┬──────────┘
+                                                                │
+                                                    ┌───────────▼───────────┐
+                                                    │  In-UI Observability  │
+                                                    │  (replaces Arize AX)  │
+                                                    │  Token badges, cost,  │
+                                                    │  latency, feedback    │
+                                                    │  ratings, analytics   │
+                                                    │  → Supabase Postgres  │
+                                                    └──────────────────────┘
 
-**The solution:** Two things. First, a **playground** sandbox for safe SQL execution. Second, a new **entity reconciliation** step: after extraction, the system queries existing DB records and uses the LLM to semantically match extracted entities against them. It catches typos, abbreviations, and name variations — then runs deterministic conflict checks for date overlaps and active-policy collisions. The pipeline becomes *database-aware*.
-
+  Observability moved from external Arize AX into the UI — token
+  badges, cost/latency per step, feedback ratings, all persisted
+  to Supabase PostgreSQL. Model configurators enabled swapping
+  GPT-5-mini → gemini-3-flash (~31s total, down from ~3–5 min).
+  Entity reconciliation prevents duplicate orgs/policies.
 ```
-┌──────────┐     ┌───────────┐     ┌───────────┐     ┌───────────┐     ┌───────────┐
-│  Upload  │────▶│  EXTRACT  │────▶│ RECONCILE │────▶│   PLAN    │────▶│    SQL    │
-│  Policy  │     │ + guardrails     │ (NEW)           │ + confidence    │ + validation
-└──────────┘     └─────┬─────┘     └─────┬─────┘     └─────┬─────┘     └─────┬─────┘
-                       │                 │                  │                  │
-                 ┌─────▼─────┐     ┌─────▼─────┐     ┌─────▼─────┐     ┌─────▼─────┐
-                 │ 8-category│     │ LLM fuzzy  │     │ Confidence │     │ Playground│
-                 │ rule      │     │ matching   │     │ deduction  │     │ vs Prod   │
-                 │ exclusion │     │ vs existing│     │ rubric     │     │ isolation │
-                 │           │     │ DB records │     │            │     │           │
-                 │           │     │            │     │ Uses       │     │           │
-                 │           │     │ + date     │     │ matched    │     │           │
-                 │           │     │   overlap  │     │ IDs from   │     │           │
-                 │           │     │   detection│     │ reconcile  │     │           │
-                 └─────┬─────┘     └─────┬─────┘     └─────┬─────┘     └─────┬─────┘
-                       │                 │                  │                  │
-                       ▼                 ▼                  ▼                  ▼
-               ┌───────────────────────────────────────────────────────────────────┐
-               │     Human still reviews 100% (Phase 1)                           │
-               │     But system now collects:                                     │
-               │       • Per-step ratings (G/P/B)                                │
-               │       • Per-model token usage + latency                         │
-               │       • Aggregated model stats via /stats                       │
-               │       • Entity match confidence + conflict warnings             │
-               │                                                                  │
-               │     When enough data accumulates:                               │
-               │         ┌──────────┴──────────┐                                  │
-               │         │                     │                                  │
-               │    ▼ > 90% Good           ▼ < 90%                                │
-               │  ┌──────────┐       ┌──────────────┐                             │
-               │  │  Future: │       │  Continue    │                             │
-               │  │  Auto-   │       │  Human      │                             │
-               │  │  approve │       │  Review     │                             │
-               │  └──────────┘       └──────────────┘                             │
-               └───────────────────────────────────────────────────────────────────┘
+
+### Iteration 3 — Prompt Caching *(Cost Optimization at Scale)*
+
+```text
+┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
+│              │    │   EXTRACT    │    │  RECONCILE   │    │   PLAN       │    │   SQL        │
+│  Upload      │───▶│             │───▶│             │───▶│             │───▶│             │
+│  Policy PDF  │    │  ~2K tokens │    │  ~1.5K tok  │    │  ~8K tokens │    │  ~7K tokens │
+│              │    │  (below     │    │  (below     │    │  (CACHE     │    │  (CACHE     │
+└──────────────┘    │  cache min) │    │  cache min) │    │  ELIGIBLE)  │    │  ELIGIBLE)  │
+                    └─────────────┘    └─────────────┘    └──────┬──────┘    └──────┬──────┘
+                                                                 │                  │
+                                                          ┌──────▼──────────────────▼──────┐
+                                                          │  Cached prompt prefixes:       │
+                                                          │  System prompt + schema JSON   │
+                                                          │  + planning guidance           │
+                                                          │                                │
+                                                          │  23.5K tokens from cache       │
+                                                          │  (5.5% of 427K total)          │
+                                                          │  Hit rate grows with volume    │
+                                                          └───────────────────────────────┘
+
+  OpenRouter cache headers on all LLM nodes. Only Plan + SQL
+  steps have prompts large enough for cache eligibility.
 ```
 
 ---
@@ -250,4 +234,5 @@ This decomposition enabled every subsequent optimization: prompt distillation, p
 4. **Playground mode is not optional.** AI-generated SQL must never touch production.
 5. **RAG is not always the answer.** For single-document extraction, full-text beats retrieval (97.3% retrieved = pure overhead).
 6. **The feedback loop closes the circle.** Ratings → comparison → thresholds → autonomy.
-7. **Stateless pipelines corrupt shared databases.** Entity reconciliation (LLM fuzzy matching + deterministic conflict checks) prevents duplicate orgs/policies from accumulating silently.
+7. **Stateless pipelines corrupt shared databases.** Entity reconciliation prevents duplicate orgs/policies from accumulating silently.
+8. **LLMs fill blanks, they don't flag them.** When a source document is missing metadata (company name, region, effective date), the model fabricates plausible values instead of reporting the gap. Extraction prompts need explicit absence handling — instructions for what to do when data is *not there*, not just when it is. In a compliance system, a hallucinated date or company name silently corrupts the database.
