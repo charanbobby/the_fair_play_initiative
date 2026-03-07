@@ -59,6 +59,7 @@ elif _raw_url.startswith("postgresql"):
             password=_pg_pass,
             dbname=_pg_db,
             sslmode="require",
+            connect_timeout=10,
         )
 
     engine = create_engine(
@@ -118,6 +119,7 @@ if _analytics_url and _analytics_url.startswith("postgresql"):
             password=_a_pass,
             dbname=_a_db,
             sslmode="require",
+            connect_timeout=10,
         )
 
     analytics_engine = create_engine(
