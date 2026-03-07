@@ -136,7 +136,7 @@
               <h1 class="text-xl font-bold">The Fair Play Initiative</h1>
               <p class="text-xs text-slate-400">
                 Balanced Attendance Management
-                <span class="ml-2 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.10.1</span>
+                <span class="ml-2 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.10.2</span>
                 <span id="playground-badge" class="ml-1 bg-amber-500 text-amber-50 text-xs font-mono px-1.5 py-0.5 rounded hidden">Playground</span>
               </p>
             </div>
@@ -277,29 +277,33 @@
           <button
             onclick="switchTab('dashboard')"
             id="tab-dashboard"
-            class="tab-active py-4 px-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition"
+            class="tab-active py-4 px-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition flex items-center gap-1.5"
           >
+            <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
             Dashboard
           </button>
           <button
             onclick="switchTab('policies')"
             id="tab-policies"
-            class="py-4 px-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition"
+            class="py-4 px-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition flex items-center gap-1.5"
           >
-            Policy Management
+            <i data-lucide="brain-circuit" class="w-4 h-4"></i>
+            AI Policy Management
           </button>
           <button
             onclick="switchTab('attendance')"
             id="tab-attendance"
-            class="py-4 px-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition"
+            class="py-4 px-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition flex items-center gap-1.5"
           >
+            <i data-lucide="calendar-clock" class="w-4 h-4"></i>
             Attendance Logs
           </button>
           <button
             onclick="switchTab('employees')"
             id="tab-employees"
-            class="py-4 px-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition"
+            class="py-4 px-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition flex items-center gap-1.5"
           >
+            <i data-lucide="users" class="w-4 h-4"></i>
             Employees
           </button>
         </div>
@@ -361,16 +365,17 @@
         </div>
       </div>
 
-      <!-- Policy Management Tab -->
+      <!-- AI Policy Management Tab -->
       <div id="content-policies" class="tab-content hidden">
         <div class="bg-white rounded-b-xl p-6 card-shadow">
           <div class="flex items-center justify-between mb-6 flex-wrap gap-4">
             <div>
-              <h3 class="text-lg font-semibold text-slate-800">
-                Policy Document Management
+              <h3 class="text-lg font-semibold text-slate-800 flex items-center gap-2">
+                <i data-lucide="sparkles" class="w-5 h-5 text-indigo-500"></i>
+                AI Policy Analyzer
               </h3>
               <p class="text-sm text-slate-500">
-                Manage policies across organizations and regions
+                Upload policy documents and let AI extract, reconcile, and generate database queries
               </p>
             </div>
             <div class="flex gap-3">
@@ -406,52 +411,81 @@
             <!-- Populated by JS -->
           </div>
 
-          <!-- Per-Step Model Selectors -->
-          <div class="mb-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div>
-              <label for="llm-model-extract" class="block text-xs font-medium text-slate-500 mb-1">
-                <i data-lucide="scan-search" class="w-3.5 h-3.5 inline -mt-0.5"></i>
-                Extraction Model
-              </label>
-              <select id="llm-model-extract" class="llm-model-select border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white w-full" onchange="showModelCard('extract')"></select>
-              <div id="model-card-extract" class="hidden mt-1 px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs text-slate-500"></div>
-              <div id="model-stats-extract" class="hidden mt-1 px-2 py-1 text-xs text-slate-600"></div>
+          <!-- Per-Step Model Selectors (collapsed by default) -->
+          <details class="mb-4 border border-slate-200 rounded-lg">
+            <summary class="flex items-center gap-2 px-4 py-2.5 cursor-pointer hover:bg-slate-50 transition select-none text-sm font-medium text-slate-500">
+              <i data-lucide="settings-2" class="w-4 h-4"></i>
+              Model Configuration
+              <span class="text-xs font-normal text-slate-400 ml-1">(defaults used if unchanged)</span>
+            </summary>
+            <div class="px-4 pb-4 pt-2 grid grid-cols-1 md:grid-cols-3 gap-3 border-t border-slate-100">
+              <div>
+                <label for="llm-model-extract" class="block text-xs font-medium text-slate-500 mb-1">
+                  <i data-lucide="scan-search" class="w-3.5 h-3.5 inline -mt-0.5"></i>
+                  Extraction Model
+                </label>
+                <select id="llm-model-extract" class="llm-model-select border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white w-full" onchange="showModelCard('extract')"></select>
+                <div id="model-card-extract" class="hidden mt-1 px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs text-slate-500"></div>
+                <div id="model-stats-extract" class="hidden mt-1 px-2 py-1 text-xs text-slate-600"></div>
+              </div>
+              <div>
+                <label for="llm-model-plan" class="block text-xs font-medium text-slate-500 mb-1">
+                  <i data-lucide="list-tree" class="w-3.5 h-3.5 inline -mt-0.5"></i>
+                  Planning Model
+                </label>
+                <select id="llm-model-plan" class="llm-model-select border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white w-full" onchange="showModelCard('plan')"></select>
+                <div id="model-card-plan" class="hidden mt-1 px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs text-slate-500"></div>
+                <div id="model-stats-plan" class="hidden mt-1 px-2 py-1 text-xs text-slate-600"></div>
+              </div>
+              <div>
+                <label for="llm-model-sql" class="block text-xs font-medium text-slate-500 mb-1">
+                  <i data-lucide="database" class="w-3.5 h-3.5 inline -mt-0.5"></i>
+                  SQL Generation Model
+                </label>
+                <select id="llm-model-sql" class="llm-model-select border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white w-full" onchange="showModelCard('sql')"></select>
+                <div id="model-card-sql" class="hidden mt-1 px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs text-slate-500"></div>
+                <div id="model-stats-sql" class="hidden mt-1 px-2 py-1 text-xs text-slate-600"></div>
+              </div>
             </div>
-            <div>
-              <label for="llm-model-plan" class="block text-xs font-medium text-slate-500 mb-1">
-                <i data-lucide="list-tree" class="w-3.5 h-3.5 inline -mt-0.5"></i>
-                Planning Model
-              </label>
-              <select id="llm-model-plan" class="llm-model-select border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white w-full" onchange="showModelCard('plan')"></select>
-              <div id="model-card-plan" class="hidden mt-1 px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs text-slate-500"></div>
-              <div id="model-stats-plan" class="hidden mt-1 px-2 py-1 text-xs text-slate-600"></div>
+          </details>
+
+          <!-- AI Pipeline Indicator -->
+          <div id="pipeline-indicator" class="mb-4 flex items-center justify-center gap-1 flex-wrap">
+            <div id="pipe-upload" class="pipeline-step active flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700 border border-indigo-200 transition-all">
+              <i data-lucide="upload" class="w-3.5 h-3.5"></i> Upload
             </div>
-            <div>
-              <label for="llm-model-sql" class="block text-xs font-medium text-slate-500 mb-1">
-                <i data-lucide="database" class="w-3.5 h-3.5 inline -mt-0.5"></i>
-                SQL Generation Model
-              </label>
-              <select id="llm-model-sql" class="llm-model-select border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white w-full" onchange="showModelCard('sql')"></select>
-              <div id="model-card-sql" class="hidden mt-1 px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs text-slate-500"></div>
-              <div id="model-stats-sql" class="hidden mt-1 px-2 py-1 text-xs text-slate-600"></div>
-              <!-- Execute button appears after SQL generation in results -->
+            <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-slate-300"></i>
+            <div id="pipe-extract" class="pipeline-step flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-400 border border-slate-200 transition-all">
+              <i data-lucide="scan-search" class="w-3.5 h-3.5"></i> Extract
+            </div>
+            <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-slate-300"></i>
+            <div id="pipe-reconcile" class="pipeline-step flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-400 border border-slate-200 transition-all">
+              <i data-lucide="git-merge" class="w-3.5 h-3.5"></i> Reconcile
+            </div>
+            <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-slate-300"></i>
+            <div id="pipe-plan" class="pipeline-step flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-400 border border-slate-200 transition-all">
+              <i data-lucide="list-tree" class="w-3.5 h-3.5"></i> Plan
+            </div>
+            <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-slate-300"></i>
+            <div id="pipe-sql" class="pipeline-step flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-400 border border-slate-200 transition-all">
+              <i data-lucide="database" class="w-3.5 h-3.5"></i> SQL
             </div>
           </div>
 
           <!-- Upload Zone -->
           <div
             id="policy-dropzone"
-            class="border-2 border-dashed border-slate-300 rounded-xl p-12 text-center transition-all cursor-pointer hover:border-indigo-400 hover:bg-slate-50"
+            class="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center transition-all cursor-pointer hover:border-indigo-400 hover:bg-slate-50"
           >
             <div
-              class="bg-indigo-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
+              class="bg-indigo-100 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3"
             >
-              <i data-lucide="upload-cloud" class="w-8 h-8 text-indigo-600"></i>
+              <i data-lucide="upload-cloud" class="w-6 h-6 text-indigo-600"></i>
             </div>
-            <p class="text-lg font-medium text-slate-700 mb-2">
+            <p class="text-base font-medium text-slate-700 mb-1">
               Drop your policy document here
             </p>
-            <p class="text-sm text-slate-500 mb-4">
+            <p class="text-xs text-slate-500 mb-3">
               Supports PDF, DOCX, and TXT files
             </p>
             <input
@@ -703,16 +737,6 @@
           <!-- Organization Policies Detail -->
           <div id="org-policies-detail" class="mb-8">
             <!-- Populated by JS when org selected -->
-          </div>
-
-          <!-- Active Rules (hidden until org selected) -->
-          <div class="mt-8 hidden">
-            <h4 id="active-rules-heading" class="text-md font-semibold text-slate-800 mb-4">
-              Active Policy Rules
-            </h4>
-            <div id="active-rules-list" class="space-y-3">
-              <!-- Active rules populated by JS -->
-            </div>
           </div>
         </div>
       </div>
@@ -2481,11 +2505,51 @@
         sql: "Generating SQL statements...",
       };
 
+      /** Activate a pipeline step indicator (highlight current, mark previous as done). */
+      function setPipelineStep(step) {
+        const steps = ["upload", "extract", "reconcile", "plan", "sql"];
+        const idx = steps.indexOf(step);
+        steps.forEach((s, i) => {
+          const el = document.getElementById(`pipe-${s}`);
+          if (!el) return;
+          if (i < idx) {
+            // completed
+            el.className = el.className.replace(/bg-\S+/g, "").replace(/text-\S+/g, "").replace(/border-\S+/g, "");
+            el.classList.add("pipeline-step", "flex", "items-center", "gap-1", "px-3", "py-1.5", "rounded-full", "text-xs", "font-medium", "bg-emerald-100", "text-emerald-700", "border", "border-emerald-200", "transition-all");
+          } else if (i === idx) {
+            // active
+            el.className = el.className.replace(/bg-\S+/g, "").replace(/text-\S+/g, "").replace(/border-\S+/g, "");
+            el.classList.add("pipeline-step", "active", "flex", "items-center", "gap-1", "px-3", "py-1.5", "rounded-full", "text-xs", "font-medium", "bg-indigo-100", "text-indigo-700", "border", "border-indigo-200", "transition-all");
+          } else {
+            // pending
+            el.className = el.className.replace(/bg-\S+/g, "").replace(/text-\S+/g, "").replace(/border-\S+/g, "");
+            el.classList.add("pipeline-step", "flex", "items-center", "gap-1", "px-3", "py-1.5", "rounded-full", "text-xs", "font-medium", "bg-slate-100", "text-slate-400", "border", "border-slate-200", "transition-all");
+          }
+        });
+        if (typeof lucide !== "undefined" && lucide.createIcons) lucide.createIcons();
+      }
+
+      /** Mark all pipeline steps as complete. */
+      function setPipelineDone() {
+        ["upload", "extract", "reconcile", "plan", "sql"].forEach(s => {
+          const el = document.getElementById(`pipe-${s}`);
+          if (!el) return;
+          el.className = el.className.replace(/bg-\S+/g, "").replace(/text-\S+/g, "").replace(/border-\S+/g, "");
+          el.classList.add("pipeline-step", "flex", "items-center", "gap-1", "px-3", "py-1.5", "rounded-full", "text-xs", "font-medium", "bg-emerald-100", "text-emerald-700", "border", "border-emerald-200", "transition-all");
+        });
+      }
+
+      /** Reset pipeline to initial state. */
+      function resetPipeline() {
+        setPipelineStep("upload");
+      }
+
       function showStepProgress(step) {
         const el = document.getElementById("step-progress");
         const label = document.getElementById("step-progress-label");
         label.textContent = STEP_LABELS[step] || `Running ${step}...`;
         el.classList.remove("hidden");
+        setPipelineStep(step);
       }
 
       function hideStepProgress() {
@@ -2574,6 +2638,7 @@
 
           case "done":
             hideStepProgress();
+            setPipelineDone();
             _streamedAnalysisData.filename = evt.data.filename;
             _lastAnalysisData = { ..._streamedAnalysisData };
             // Populate plain-text views
@@ -2686,7 +2751,7 @@
         }
       }
 
-      // Policy Management
+      // AI Policy Management
       function handlePolicyUpload(event) {
         const file = event.target.files[0];
         if (file) processPolicyFile(file);
@@ -3421,6 +3486,7 @@
         document.querySelectorAll("#analysis-results .collapsible-section").forEach(d => d.setAttribute("open", ""));
         const fileInput = document.getElementById("policy-file");
         if (fileInput) fileInput.value = "";
+        resetPipeline();
       }
 
       function renderActiveRules() {
@@ -3528,54 +3594,6 @@
           detailContainer.classList.add("hidden");
         }
 
-        // Active rules: only show when an org is selected
-        const rulesContainer = document.getElementById("active-rules-list");
-        const rulesHeading = rulesContainer?.closest(".mt-8");
-        if (state.currentOrganization) {
-          const org = state.organizations.find(
-            (o) => o.id === state.currentOrganization,
-          );
-          const orgRules = org
-            ? org.policies.flatMap((p) => p.rules)
-            : state.rules;
-          const heading = document.getElementById("active-rules-heading");
-          if (heading) heading.textContent = org ? `${org.name} — Active Policy Rules` : "Active Policy Rules";
-          if (rulesHeading) rulesHeading.classList.remove("hidden");
-          rulesContainer.innerHTML = orgRules.length
-            ? orgRules
-                .map(
-                  (rule) => `
-                <div class="flex items-center justify-between p-4 bg-slate-50 rounded-xl">
-                    <div class="flex items-center gap-4">
-                        <div class="bg-indigo-100 p-2 rounded-lg">
-                            <i data-lucide="gavel" class="w-5 h-5 text-indigo-600"></i>
-                        </div>
-                        <div>
-                            <h5 class="font-medium text-slate-800">${rule.name}</h5>
-                            <p class="text-sm text-slate-500">${rule.description}</p>
-                        </div>
-                    </div>
-                    <div class="flex items-center gap-6">
-                        <div class="text-right">
-                            <p class="text-sm text-slate-500">Threshold</p>
-                            <p class="font-medium text-slate-800">${rule.threshold > 0 ? `> ${rule.threshold} min` : "Any"}</p>
-                        </div>
-                        <div class="text-right">
-                            <p class="text-sm text-slate-500">Points</p>
-                            <p class="font-medium text-slate-800">${rule.points}</p>
-                        </div>
-                        <button onclick="toggleRule(${rule.id})" class="p-2 ${rule.active ? "text-emerald-600" : "text-slate-400"} hover:bg-slate-200 rounded-lg transition">
-                            <i data-lucide="${rule.active ? "check-circle" : "circle"}" class="w-5 h-5"></i>
-                        </button>
-                    </div>
-                </div>
-            `,
-                )
-                .join("")
-            : '<p class="text-sm text-slate-400 italic">No rules defined for this organization.</p>';
-        } else {
-          if (rulesHeading) rulesHeading.classList.add("hidden");
-        }
         lucide.createIcons();
       }
 
