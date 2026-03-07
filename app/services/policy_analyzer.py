@@ -513,10 +513,8 @@ def node_generate_sql(state: FPIState) -> dict:
 # ---------------------------------------------------------------------------
 
 def _route_after_plan(state: FPIState) -> str:
-    """Route to SQL generation if model_sql is provided, otherwise end."""
-    if state.get("model_sql"):
-        return "node_generate_sql"
-    return END
+    """Always proceed to SQL generation after planning."""
+    return "node_generate_sql"
 
 
 def _build_graph() -> StateGraph:
