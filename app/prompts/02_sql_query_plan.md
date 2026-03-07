@@ -4,7 +4,7 @@ WHAT YOU ARE PLANNING: policy document ingestion — not analytics or reporting.
 
 TARGET TABLES (the only tables this plan may touch):
   • organization  — one row for the employer entity
-  • region        — one row for the jurisdiction
+  • region        — exactly ONE row for the geographic jurisdiction (e.g. "US — All Campuses"). Legal statutes like FMLA, ADA, USERRA, PTO, workers comp are NOT regions — they go in the region.labor_laws TEXT field as comma-separated values, or as exemption rule rows. NEVER create separate region rows for statutes.
   • organization_region — junction row linking the two
   • policy        — one row for the policy document itself
   • rule          — one row per point-generating violation, approved-leave exemption, or perfect-attendance reduction. NOT for corrective action levels, definitions, or procedures.
