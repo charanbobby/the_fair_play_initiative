@@ -141,7 +141,7 @@
               <h1 class="text-xl font-bold">The Fair Play Initiative</h1>
               <p class="text-xs text-slate-400">
                 Balanced Attendance Management
-                <span class="ml-2 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.10.3</span>
+                <span class="ml-2 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.10.4</span>
                 <span id="playground-badge" class="ml-1 bg-amber-500 text-amber-50 text-xs font-mono px-1.5 py-0.5 rounded hidden">Playground</span>
               </p>
             </div>
@@ -633,6 +633,12 @@
                     <span class="collapse-arrow">&#9654;</span>
                     Entity Reconciliation
                   </h5>
+                  <div id="feedback-reconcile" class="flex items-center gap-1" data-step="reconcile" onclick="event.stopPropagation()">
+                    <span class="text-xs text-slate-400 mr-1">Rate:</span>
+                    <button onclick="event.stopPropagation();submitFeedback('reconcile','good')" class="feedback-btn px-2 py-0.5 rounded text-xs border border-slate-200 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-700 transition" title="Good">Good</button>
+                    <button onclick="event.stopPropagation();submitFeedback('reconcile','partial')" class="feedback-btn px-2 py-0.5 rounded text-xs border border-slate-200 hover:bg-amber-50 hover:border-amber-300 hover:text-amber-700 transition" title="Partial">Partial</button>
+                    <button onclick="event.stopPropagation();submitFeedback('reconcile','bad')" class="feedback-btn px-2 py-0.5 rounded text-xs border border-slate-200 hover:bg-red-50 hover:border-red-300 hover:text-red-700 transition" title="Bad">Bad</button>
+                  </div>
                 </summary>
                 <div class="collapsible-body px-4 py-3">
                   <div id="reconcile-section" class="space-y-3">

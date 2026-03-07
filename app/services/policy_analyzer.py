@@ -850,6 +850,10 @@ def _split_sql_statements(sql: str) -> list[str]:
             else:
                 in_quote = False
                 current.append(ch)
+        elif ch == "\\" and in_quote and i + 1 < len(sql) and sql[i + 1] == "'":
+            # Handle backslash-escaped quotes (\') — treat as escaped, stay in_quote
+            current.append("''")
+            i += 1
         elif ch == ";" and not in_quote:
             stmt = "".join(current).strip()
             if stmt:
