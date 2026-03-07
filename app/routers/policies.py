@@ -89,6 +89,7 @@ async def analyze_policy(
     file: Optional[UploadFile] = File(None),
     text: Optional[str] = Form(None),
     model_extract: Optional[str] = None,
+    model_reconcile: Optional[str] = None,
     model_plan: Optional[str] = None,
     model_sql: Optional[str] = None,
     execute: bool = False,
@@ -106,6 +107,7 @@ async def analyze_policy(
 
     Optional query parameters:
       - model_extract: model for keyword extraction
+      - model_reconcile: model for entity reconciliation
       - model_plan: model for SQL ingestion planning
       - model_sql: model for SQL generation (enables step 3)
       - execute: if true AND model_sql is set, execute SQL (playground only)
@@ -147,6 +149,7 @@ async def analyze_policy(
         result = await analyze_policy_document(
             filename, content,
             model_extract=model_extract,
+            model_reconcile=model_reconcile,
             model_plan=model_plan,
             model_sql=model_sql,
             existing_records=existing_records,
@@ -181,7 +184,7 @@ async def analyze_policy(
                     analytics_db.add(models.AnalysisLog(
                         filename=filename,
                         step="reconcile",
-                        llm_model=default_model,
+                        llm_model=model_reconcile or default_model,
                         prompt_tokens=usage.reconcile_prompt,
                         completion_tokens=usage.reconcile_completion,
                         total_tokens=usage.reconcile_total,
@@ -228,6 +231,7 @@ async def analyze_policy_stream(
     file: Optional[UploadFile] = File(None),
     text: Optional[str] = Form(None),
     model_extract: Optional[str] = None,
+    model_reconcile: Optional[str] = None,
     model_plan: Optional[str] = None,
     model_sql: Optional[str] = None,
     db: Session = Depends(get_db),
@@ -239,6 +243,7 @@ async def analyze_policy_stream(
     Each pipeline step emits an SSE event as it completes:
       - event: step_start  (step about to begin)
       - event: extract     (keyword extraction results)
+      - event: reconcile   (entity reconciliation results)
       - event: plan        (SQL ingestion plan results)
       - event: sql         (SQL generation results — only if model_sql set)
       - event: done        (pipeline complete)
@@ -276,6 +281,7 @@ async def analyze_policy_stream(
         async for event in stream_policy_analysis(
             filename, content,
             model_extract=model_extract,
+            model_reconcile=model_reconcile,
             model_plan=model_plan,
             model_sql=model_sql,
             existing_records=existing_records,
