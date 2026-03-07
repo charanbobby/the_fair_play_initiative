@@ -290,6 +290,7 @@ class AnalysisLog(Base):
     duration_ms: Mapped[int] = mapped_column(Integer, default=0)
     cache_read_tokens: Mapped[int] = mapped_column(Integer, default=0)
     cache_creation_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    cache_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), nullable=False
     )

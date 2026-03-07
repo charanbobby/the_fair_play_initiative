@@ -137,6 +137,7 @@ CREATE TABLE IF NOT EXISTS analysis_logs (
     duration_ms     INTEGER      NOT NULL DEFAULT 0,
     cache_read_tokens    INTEGER NOT NULL DEFAULT 0,
     cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
+    cache_enabled   BOOLEAN      NOT NULL DEFAULT TRUE,
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 
@@ -144,6 +145,9 @@ CREATE TABLE IF NOT EXISTS analysis_logs (
 DO $$ BEGIN
     ALTER TABLE analysis_logs ADD COLUMN IF NOT EXISTS cache_read_tokens INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE analysis_logs ADD COLUMN IF NOT EXISTS cache_creation_tokens INTEGER NOT NULL DEFAULT 0;
+    -- Add with DEFAULT FALSE so existing rows are marked pre-cache, then flip default to TRUE for future rows
+    ALTER TABLE analysis_logs ADD COLUMN IF NOT EXISTS cache_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE analysis_logs ALTER COLUMN cache_enabled SET DEFAULT TRUE;
 EXCEPTION WHEN OTHERS THEN NULL;
 END $$;
 

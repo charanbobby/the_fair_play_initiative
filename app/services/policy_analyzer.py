@@ -116,6 +116,7 @@ class FPIState(TypedDict):
 def _extract_token_usage(raw_msg) -> dict:
     """Pull token counts from an AIMessage's usage_metadata."""
     usage = getattr(raw_msg, "usage_metadata", None) or {}
+    log.info("RAW usage_metadata: %s", usage)
     result = {
         "prompt": usage.get("input_tokens", 0),
         "completion": usage.get("output_tokens", 0),
