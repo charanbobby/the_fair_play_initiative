@@ -1206,6 +1206,8 @@ async def stream_policy_analysis(
                     "extract_completion": et.get("completion", 0),
                     "extract_total": et.get("total", 0),
                     "extract_duration_ms": state_update.get("extract_duration_ms", 0),
+                    "extract_cache_read": et.get("cache_read", 0),
+                    "extract_cache_creation": et.get("cache_creation", 0),
                 }
                 yield _sse_event("extract", {
                     "keywords": kw.model_dump(),
@@ -1224,6 +1226,8 @@ async def stream_policy_analysis(
                     "reconcile_completion": rt.get("completion", 0),
                     "reconcile_total": rt.get("total", 0),
                     "reconcile_duration_ms": state_update.get("reconcile_duration_ms", 0),
+                    "reconcile_cache_read": rt.get("cache_read", 0),
+                    "reconcile_cache_creation": rt.get("cache_creation", 0),
                 }
                 yield _sse_event("reconcile", {
                     "reconciliation": recon.model_dump() if recon else None,
@@ -1241,6 +1245,8 @@ async def stream_policy_analysis(
                     "plan_completion": pt.get("completion", 0),
                     "plan_total": pt.get("total", 0),
                     "plan_duration_ms": state_update.get("plan_duration_ms", 0),
+                    "plan_cache_read": pt.get("cache_read", 0),
+                    "plan_cache_creation": pt.get("cache_creation", 0),
                 }
                 yield _sse_event("plan", {
                     "sql_plan": plan.model_dump(),
@@ -1259,6 +1265,8 @@ async def stream_policy_analysis(
                     "sql_completion": st.get("completion", 0),
                     "sql_total": st.get("total", 0),
                     "sql_duration_ms": state_update.get("sql_duration_ms", 0),
+                    "sql_cache_read": st.get("cache_read", 0),
+                    "sql_cache_creation": st.get("cache_creation", 0),
                 }
                 yield _sse_event("sql", {
                     "sql_result": sql.model_dump(),
@@ -1282,6 +1290,8 @@ async def stream_policy_analysis(
                     completion_tokens=tokens.get("completion", 0),
                     total_tokens=tokens.get("total", 0),
                     duration_ms=duration,
+                    cache_read_tokens=tokens.get("cache_read", 0),
+                    cache_creation_tokens=tokens.get("cache_creation", 0),
                 ))
             _log_db.commit()
         except Exception:

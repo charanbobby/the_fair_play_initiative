@@ -141,7 +141,7 @@
               <h1 class="text-xl font-bold">The Fair Play Initiative</h1>
               <p class="text-xs text-slate-400">
                 Balanced Attendance Management
-                <span class="ml-2 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.10.7</span>
+                <span class="ml-2 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.10.8</span>
                 <span id="playground-badge" class="ml-1 bg-amber-500 text-amber-50 text-xs font-mono px-1.5 py-0.5 rounded hidden">Playground</span>
               </p>
             </div>
@@ -588,18 +588,22 @@
               <div class="flex items-center gap-1.5 bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg">
                 <i data-lucide="hash" class="w-3.5 h-3.5"></i>
                 Extraction: <span id="tokens-extract" class="font-mono font-semibold">—</span> tokens
+                <span id="cache-extract" class="hidden ml-1 bg-green-100 text-green-700 font-mono font-semibold px-1.5 py-0.5 rounded text-[10px]"></span>
               </div>
               <div id="tokens-reconcile-wrapper" class="hidden flex items-center gap-1.5 bg-amber-50 text-amber-700 px-3 py-1.5 rounded-lg">
                 <i data-lucide="hash" class="w-3.5 h-3.5"></i>
                 Reconcile: <span id="tokens-reconcile" class="font-mono font-semibold">—</span> tokens
+                <span id="cache-reconcile" class="hidden ml-1 bg-green-100 text-green-700 font-mono font-semibold px-1.5 py-0.5 rounded text-[10px]"></span>
               </div>
               <div class="flex items-center gap-1.5 bg-violet-50 text-violet-700 px-3 py-1.5 rounded-lg">
                 <i data-lucide="hash" class="w-3.5 h-3.5"></i>
                 Planning: <span id="tokens-plan" class="font-mono font-semibold">—</span> tokens
+                <span id="cache-plan" class="hidden ml-1 bg-green-100 text-green-700 font-mono font-semibold px-1.5 py-0.5 rounded text-[10px]"></span>
               </div>
               <div id="tokens-sql-wrapper" class="hidden flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-lg">
                 <i data-lucide="hash" class="w-3.5 h-3.5"></i>
                 SQL Gen: <span id="tokens-sql" class="font-mono font-semibold">—</span> tokens
+                <span id="cache-sql" class="hidden ml-1 bg-green-100 text-green-700 font-mono font-semibold px-1.5 py-0.5 rounded text-[10px]"></span>
               </div>
             </div>
 
@@ -2965,6 +2969,19 @@
           document.getElementById("tokens-sql").textContent =
             (tokenData.sql_total || 0).toLocaleString();
           document.getElementById("tokens-sql-wrapper").classList.remove("hidden");
+        }
+        // Show cache hit/write indicator
+        const cacheRead = tokenData[step + "_cache_read"] || 0;
+        const cacheCreation = tokenData[step + "_cache_creation"] || 0;
+        const cacheEl = document.getElementById("cache-" + step);
+        if (cacheEl) {
+          if (cacheRead > 0) {
+            cacheEl.textContent = "CACHED " + cacheRead.toLocaleString();
+            cacheEl.className = "ml-1 bg-green-100 text-green-700 font-mono font-semibold px-1.5 py-0.5 rounded text-[10px]";
+          } else if (cacheCreation > 0) {
+            cacheEl.textContent = "CACHE WRITE " + cacheCreation.toLocaleString();
+            cacheEl.className = "ml-1 bg-yellow-100 text-yellow-700 font-mono font-semibold px-1.5 py-0.5 rounded text-[10px]";
+          }
         }
       }
 

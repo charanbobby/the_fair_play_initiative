@@ -135,8 +135,17 @@ CREATE TABLE IF NOT EXISTS analysis_logs (
     completion_tokens INTEGER    NOT NULL DEFAULT 0,
     total_tokens    INTEGER      NOT NULL DEFAULT 0,
     duration_ms     INTEGER      NOT NULL DEFAULT 0,
+    cache_read_tokens    INTEGER NOT NULL DEFAULT 0,
+    cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
+
+-- Add cache columns if table already exists (idempotent migration)
+DO $$ BEGIN
+    ALTER TABLE analysis_logs ADD COLUMN IF NOT EXISTS cache_read_tokens INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE analysis_logs ADD COLUMN IF NOT EXISTS cache_creation_tokens INTEGER NOT NULL DEFAULT 0;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
 
 -- ============================================================
 -- 11. AnalysisFeedback — user-submitted Good/Partial/Bad ratings
