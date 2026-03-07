@@ -107,7 +107,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Apprentice — Fair Play Initiative API",
     description="FastAPI backend for Apprentice: verifiable agentic workflows. First domain: Fair Play Initiative (workforce attendance compliance).",
-    version="0.10.9",
+    version="0.10.10",
     lifespan=lifespan,
     redirect_slashes=False,
 )
@@ -170,6 +170,7 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 # ---------------------------------------------------------------------------
 
 @app.get("/", include_in_schema=False)
+@app.head("/", include_in_schema=False)
 async def serve_landing():
     """Serve the public landing page, falling back to the SPA."""
     landing = STATIC_DIR / "landing.html"
@@ -182,6 +183,19 @@ async def serve_landing():
         {"message": "FPI API is running."},
         status_code=200,
     )
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    """Serve favicon from static dir, or return 204 if missing."""
+    ico = STATIC_DIR / "favicon.ico"
+    if ico.exists():
+        return FileResponse(ico, media_type="image/x-icon")
+    svg = STATIC_DIR / "favicon.svg"
+    if svg.exists():
+        return FileResponse(svg, media_type="image/svg+xml")
+    from fastapi.responses import Response
+    return Response(status_code=204)
 
 
 @app.get("/dashboard", include_in_schema=False)
