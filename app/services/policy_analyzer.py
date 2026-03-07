@@ -22,9 +22,12 @@ import asyncio
 import io
 import json
 import re
+import logging
 import warnings
 from pathlib import Path
 from typing import AsyncGenerator, TypedDict
+
+log = logging.getLogger(__name__)
 
 # Suppress harmless Pydantic v2 serializer warning from LangChain's
 # with_structured_output(include_raw=True) — the "parsed" field type
