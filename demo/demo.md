@@ -1,4 +1,4 @@
-# APPRENTICE
+# APPRENTICE — Demo Walkthrough
 
 > **Capstone Project:** Building Agentic AI Applications with a Problem-First Approach
 > **Team:** Ifesinachi Eze
@@ -18,33 +18,52 @@
 
 ---
 
-## SYSTEM DESIGN
-
-### Business Constraints
+## DESIGN CONSTRAINTS
 
 - **Security:** SQL execution is locked to Playground mode only (SQLite sandbox). Production PostgreSQL deployments cannot execute AI-generated SQL. Playground can be reset/seeded at any time without risk.
 - **Compliance:** Every pipeline step produces a reviewable artifact. Human ratings (Good / Partial / Bad) are persisted per step. Token usage, latency, and model identity logged to `AnalysisLog` for full traceability.
 - **Cost:** Target under $0.05 per policy analysis (~$0.01–0.03 actual; as low as ~$0.005 with gemini-3-flash). No fine-tuned models — only prompt engineering, prompt distillation, and few-shot examples to maintain iteration speed and cost predictability.
 
+---
+
+## ITERATION JOURNEY
+
 ### Iteration 1: Transparent Extraction Pipeline *(Black Box → Decomposed)*
 
-- HR admin uploads a policy PDF/DOCX (or pastes text) to the system
-- The LLM extracts keywords, generates a structured ingestion plan, and produces SQL — each as a separate, reviewable step
-- HR reviews every step, rates each (Good / Partial / Bad), approves or rejects
-- The system executes SQL only after human approval, in playground sandbox only
-- Initially used GPT-5-mini — single-shot pipeline took 3–5 minutes per call with no way to swap models
+We started with a single-shot black box — one LLM call that went from raw document to SQL. The output was impossible to verify: you could see the final SQL, but had no way to know *why* the AI chose those tables, joins, or values.
+
+**The fix: step-by-step decomposition into 3 transparent stages.**
+
+| Step | Purpose | Artifact Produced | Why It Matters |
+|------|---------|-------------------|----------------|
+| **1. Extract** | Identify what the document contains | Keyword chips mapped to 8 schema categories | Human can verify "did the AI find the right things?" |
+| **2. Plan** | Decide what to do with the extracted data | Structured ingestion plan — table-by-table INSERT steps, rule rows, confidence scores | **The verification gate** — a compliance officer can read and approve this before any SQL runs |
+| **3. SQL** | Generate executable code from the plan | SQL INSERT statements following FK constraints | Follows the plan mechanically — cheaper models sufficient |
+
+**Why decomposition works:**
+1. Each step produces a reviewable artifact — no more black boxes
+2. Each step can use a different model — expensive models where quality matters (Plan), cheap where the task is mechanical (Extract, SQL)
+3. The Plan step is the human checkpoint — it separates "what did the AI understand?" from "what code will it generate?"
+4. Errors are localized — if the SQL is wrong, check the Plan. If the Plan is wrong, check the Extraction.
+
+Other Iteration 1 work:
+- Initially used GPT-5-mini — single-shot pipeline took 3–5 min per call with no way to swap models
 - RAG evaluation: tested retrieval-augmented generation but found 97.3% of the document was retrieved — pure overhead for single-document extraction; full-text input used instead
 - Arize AX observability added for tracing all LLM nodes
 
 ### Iteration 2: Database-Aware Reconciliation *(Stateful Pipeline)*
 
+Iteration 1's pipeline was stateless — it had no idea what was already in the database. Upload the same policy twice, get duplicate organizations, duplicate policies, duplicate rules. Upload a slightly renamed org ("ACMI Manufacturing Co" vs "Acme Manufacturing Corporation") and the system creates a second org instead of matching the existing one.
+
+**Entity Reconciliation** solves this:
 - LLM extracts and reconciles entities against existing DB records (catches typos, abbreviations, name variations)
 - Deterministic conflict detection runs automatically (date overlaps, active-policy overwrites)
 - Matched IDs flow downstream so plan and SQL reuse existing records instead of creating duplicates
 - Human reviews flagged conflicts and reconciliation warnings before execution
-- Per-step model configurators added to playground UI — discovered gemini-3-flash runs in a fraction of the time/cost vs GPT-5-mini
-- Observability moved from external Arize AX into the UI — token badges, cost/latency per step, feedback ratings all visible inline
-- Analytics persistence to Supabase PostgreSQL (replaces external logging)
+
+**Model discovery:** Per-step model configurators added to playground UI. This is where we discovered gemini-3-flash runs in a fraction of the time/cost vs GPT-5-mini — 31s total pipeline down from 3–5 minutes.
+
+**Observability moved in-house:** Token badges, cost/latency per step, feedback ratings all visible inline in the UI, replacing external Arize AX. Analytics persisted to Supabase PostgreSQL.
 
 ### Iteration 3: Prompt Caching *(Cost Optimization at Scale)*
 
@@ -53,17 +72,12 @@
 - Lower per-run cost makes higher-volume batch processing economically viable
 - Infrastructure step toward autonomous policy lifecycle (policy diffs, drift detection, audit reports)
 
----
+### Prompt Distillation (proven technique)
 
-## ITERATION TABLE
-
-*Live production data from 71 analysis runs across 9 models (Supabase PostgreSQL)*
-
-| Itr | Cost / Latency Factors | Optimizations | Guardrails | Eval Metrics |
-|-----|----------------------|---------------|------------|--------------|
-| **1** | 3 LLM calls per document (Extract → Plan → SQL); started with GPT-5-mini (~3–5 min/call); ~19K tokens | Meta-prompting, prompt distillation (Sonnet → gemini-flash), RAG evaluation (negative result — full-text beats retrieval), Arize AX observability | Human reviews 100%; rule exclusion guardrails (8 categories) | Keyword accuracy, plan–SQL alignment, per-step ratings |
-| **2** | 4 LLM calls per document (+ reconciliation); ~31s with gemini-3-flash (down from ~3–5 min), ~21K tokens, ~$0.01–0.03/policy | Entity reconciliation (fuzzy matching), deterministic conflict detection, per-step model configurators (discovered gemini-flash = fraction of time/cost), analytics persistence | Playground/production isolation (AI-generated SQL sandboxed), reconciliation gate (0.7 confidence), conflict warnings, rollback on failure | Entity match accuracy, conflict detection rate, model rating % |
-| **3** | 4 LLM calls + prompt caching on Plan/SQL steps; 23.5K tokens served from cache (5.5% of 427K total) | OpenRouter cache headers, cached prompt prefixes, batch processing | Same as Itr 2 | Cache hit rate, tokens saved, cost per policy |
+- Run a strong model (Claude Sonnet 4.6) once on the planning step — 36s, 12,164 tokens, confidence 0.87
+- Extract the 6 structural reasoning patterns it discovered (INSERT order, ID chaining, rule granularity, value derivation, natural keys, existence checks)
+- Encode those patterns as explicit guidance in cheaper models' system prompts
+- Result: gemini-3-flash achieves same quality at ~40x cost reduction (15s, 8.3K tok, ~$0.003/run); gemini-3.1-flash-lite at ~120x reduction (7s, 8.6K tok, ~$0.001/run). No fine-tuning, no training data, instantly reversible
 
 ---
 
@@ -73,9 +87,9 @@ The experiment iterations (what we built) directly enable the trust phases (how 
 
 | Experiment Work | What It Built | Trust Phase It Enables |
 |----------------|--------------|----------------------|
-| **Itr 1:** Single-shot → decomposed pipeline (Extract → Plan → SQL), started with GPT-5-mini (3–5 min/call), prompt distillation, Arize AX observability, RAG evaluation (negative result) | Reviewable plan as verification gate, human feedback collection, token/cost tracking | **Phase 1 (Hands-On):** Human reviews everything, rates every step, system builds reliability baseline; feedback data accumulates for model comparison |
-| **Itr 2:** Entity reconciliation (fuzzy org/policy matching against existing DB), conflict detection (date overlaps, active-policy overwrites), rule exclusion guardrails, confidence deduction rubric, playground/production isolation, per-step model configurators (discovered gemini-flash), enhanced annotations, analytics persistence | Database-aware pipeline that prevents duplicate entities, automated quality checks, model rating aggregation, per-step model comparison (GPT-5-mini → gemini-flash = fraction of time/cost), guardrails that catch data conflicts before human sees them | **Phase 2 (Building Trust):** High-confidence auto-approves; human reviews flagged items only; entity reconciliation prevents silent data corruption |
-| **Itr 3:** Prompt caching across all LLM nodes, cache hit/write UI badges, cache metrics in analytics DB | Reduced redundant token processing for repeated runs; cost tracking infrastructure for cache savings | **Phase 2→3 transition:** Lower per-run cost makes higher-volume autonomous processing economically viable |
+| **Itr 1:** Single-shot → decomposed pipeline, prompt distillation, RAG evaluation (negative result) | Reviewable plan as verification gate, human feedback collection, token/cost tracking | **Phase 1 (Hands-On):** Human reviews everything, rates every step, system builds reliability baseline |
+| **Itr 2:** Entity reconciliation, conflict detection, playground/production isolation, per-step model configurators, analytics persistence | Database-aware pipeline that prevents duplicate entities, automated quality checks, model rating aggregation | **Phase 2 (Building Trust):** High-confidence auto-approves; human reviews flagged items only |
+| **Itr 3:** Prompt caching across all LLM nodes | Reduced redundant token processing; cost tracking infrastructure | **Phase 2→3 transition:** Lower per-run cost makes autonomous processing economically viable |
 | **Future:** Policy diff detection, drift monitoring, batch processing | Autonomous policy lifecycle management | **Phase 3 (Autonomous):** Routine work flows through automatically; humans handle exceptions only |
 
 ---
@@ -154,37 +168,9 @@ Ratings stored in `AnalysisFeedback` table with: step, rating, llm_model, filena
 
 This data is what makes the Phase 1 → Phase 2 transition possible: when a model consistently rates >90% Good on a step, that step can be auto-approved.
 
-### Decomposition Strategy (proven technique)
-
-Iteration 1 started as a single-shot black box — one LLM call that went from raw document to SQL. The output was impossible to verify: you could see the final SQL, but you had no way to know *why* the AI chose those tables, joins, or values.
-
-**The fix: step-by-step decomposition into 3 transparent stages.**
-
-| Step | Purpose | Artifact Produced | Why It Matters |
-|------|---------|-------------------|----------------|
-| **1. Extract** | Identify what the document contains | Keyword chips mapped to 8 schema categories | Human can verify "did the AI find the right things?" |
-| **2. Plan** | Decide what to do with the extracted data | Structured ingestion plan — table-by-table INSERT steps, rule rows, confidence scores | **The verification gate** — a compliance officer can read and approve this before any SQL runs |
-| **3. SQL** | Generate executable code from the plan | SQL INSERT statements following FK constraints | Follows the plan mechanically — cheaper models sufficient |
-
-**Why decomposition works here:**
-
-1. **Each step produces a reviewable artifact** — no more black boxes
-2. **Each step can use a different model** — expensive models where quality matters (Plan), cheap models where the task is mechanical (Extract, SQL)
-3. **The Plan step is the human checkpoint** — it separates "what did the AI understand?" from "what code will it generate?"
-4. **Errors are localized** — if the SQL is wrong, you check the Plan. If the Plan is wrong, you check the Extraction. No need to debug a monolithic prompt.
-
-This decomposition is what enabled every subsequent optimization: prompt distillation, per-step feedback, model comparison, and the trust lifecycle.
-
-### Prompt Distillation (proven technique)
-
-- Run a strong model (Claude Sonnet 4.6) once on the planning step — 36s, 12,164 tokens, confidence 0.87
-- Extract the 6 structural reasoning patterns it discovered (INSERT order, ID chaining, rule granularity, value derivation, natural keys, existence checks)
-- Encode those patterns as explicit guidance in cheaper models' system prompts
-- Result: gemini-3-flash achieves same quality at ~40x cost reduction (15s, 8.3K tok, ~$0.003/run); gemini-3.1-flash-lite at ~120x reduction (7s, 8.6K tok, ~$0.001/run). No fine-tuning, no training data, instantly reversible
-
 ---
 
-## KEY TECHNICAL INSIGHTS (poster talking points)
+## KEY TECHNICAL INSIGHTS
 
 1. **Trust is earned, not declared.** You don't flip a switch and call the system reliable. You measure your way there — Phase 1 feedback is what makes Phase 3 possible. You can't skip to the end.
 
