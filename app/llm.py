@@ -61,7 +61,7 @@ def get_llm() -> Any:
             return MockLLM()
         try:
             from langchain_openai import ChatOpenAI  # type: ignore
-            model = settings.LLM_MODEL or "gpt-4o-mini"
+            model = settings.LLM_MODEL or "google/gemini-3-flash-preview"
             logger.info(f"llm=openai model={model}")
             return ChatOpenAI(model=model, api_key=api_key)
         except ImportError:

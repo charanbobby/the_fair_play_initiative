@@ -82,7 +82,7 @@ def _build_model(
     max_tokens: int | None = None,
 ) -> ChatOpenAI:
     api_key = settings.OPENROUTER_API_KEY or settings.OPENAI_API_KEY
-    model_name = model_override or settings.LLM_MODEL or "gpt-4o-mini"
+    model_name = model_override or settings.LLM_MODEL or "google/gemini-3-flash-preview"
     kwargs: dict = dict(
         model=model_name,
         base_url="https://openrouter.ai/api/v1",
@@ -1296,7 +1296,7 @@ async def stream_policy_analysis(
     if _log_db and _log_entries:
         try:
             from app import models
-            _default = default_model or settings.LLM_MODEL or "gpt-4o-mini"
+            _default = default_model or settings.LLM_MODEL or "google/gemini-3-flash-preview"
             for step, model_override, tokens, duration in _log_entries:
                 _log_db.add(models.AnalysisLog(
                     filename=filename,

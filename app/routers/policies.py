@@ -168,7 +168,7 @@ async def analyze_policy(
 
         # Auto-save analysis logs to analytics DB (always PG, non-fatal)
         try:
-            default_model = settings.LLM_MODEL or "gpt-4o-mini"
+            default_model = settings.LLM_MODEL or "google/gemini-3-flash-preview"
             usage = result.token_usage
             if usage:
                 analytics_db.add(models.AnalysisLog(
