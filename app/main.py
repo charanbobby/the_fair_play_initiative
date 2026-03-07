@@ -107,7 +107,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Apprentice — Fair Play Initiative API",
     description="FastAPI backend for Apprentice: verifiable agentic workflows. First domain: Fair Play Initiative (workforce attendance compliance).",
-    version="0.10.14",
+    version="0.10.15",
     lifespan=lifespan,
     redirect_slashes=False,
 )
@@ -169,16 +169,19 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 # Core routes
 # ---------------------------------------------------------------------------
 
+_NO_CACHE_HEADERS = {"Cache-Control": "no-cache, no-store, must-revalidate"}
+
+
 @app.get("/", include_in_schema=False)
 @app.head("/", include_in_schema=False)
 async def serve_landing():
     """Serve the public landing page, falling back to the SPA."""
     landing = STATIC_DIR / "landing.html"
     if landing.exists():
-        return FileResponse(landing)
+        return FileResponse(landing, headers=_NO_CACHE_HEADERS)
     index = STATIC_DIR / "index.html"
     if index.exists():
-        return FileResponse(index)
+        return FileResponse(index, headers=_NO_CACHE_HEADERS)
     return JSONResponse(
         {"message": "FPI API is running."},
         status_code=200,
@@ -203,7 +206,7 @@ async def serve_dashboard():
     """Serve the FPI admin SPA."""
     index = STATIC_DIR / "index.html"
     if index.exists():
-        return FileResponse(index)
+        return FileResponse(index, headers=_NO_CACHE_HEADERS)
     return JSONResponse(
         {"message": "Dashboard not available. Place index.html in app/static/."},
         status_code=200,
