@@ -77,34 +77,34 @@ STATIC_DIR = Path(__file__).parent / "static"
 
 
 def _sync_db_init():
-    """Blocking DB init — runs in a thread so it cannot stall uvicorn."""
-    models.Base.metadata.create_all(bind=engine)
-    from app.seed import seed
-    db = SessionLocal()
+    """Blocking DB init — runs in a background thread after startup."""
     try:
-        seed(db)
-    finally:
-        db.close()
+        logger.info("bg-init: creating database tables")
+        models.Base.metadata.create_all(bind=engine)
+        logger.info("bg-init: seeding database")
+        from app.seed import seed
+        db = SessionLocal()
+        try:
+            seed(db)
+        finally:
+            db.close()
+        logger.info("bg-init: complete")
+    except Exception as exc:
+        logger.warning("bg-init: database init failed (will retry on first request): %s", exc)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _llm
     import asyncio
-    try:
-        logger.info("startup: creating database tables + seeding (15s timeout)")
-        await asyncio.wait_for(
-            asyncio.to_thread(_sync_db_init),
-            timeout=15,
-        )
-    except asyncio.TimeoutError:
-        logger.warning("startup: database init timed out after 15s — skipping")
-    except Exception as exc:
-        logger.warning("startup: database init failed (will retry on first request): %s", exc)
+
+    # Fire-and-forget: DB init runs in background so uvicorn can serve
+    # HF's health probe immediately (prevents "stuck starting" loop).
+    asyncio.get_event_loop().run_in_executor(None, _sync_db_init)
 
     logger.info("startup: initialising LLM provider")
     _llm = get_llm()
-    logger.info("startup: complete")
+    logger.info("startup: complete (DB init running in background)")
     yield
     logger.info("shutdown: complete")
 
@@ -116,7 +116,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Apprentice — Fair Play Initiative API",
     description="FastAPI backend for Apprentice: verifiable agentic workflows. First domain: Fair Play Initiative (workforce attendance compliance).",
-    version="0.10.19",
+    version="0.10.20",
     lifespan=lifespan,
     redirect_slashes=False,
 )
