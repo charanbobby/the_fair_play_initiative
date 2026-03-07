@@ -116,11 +116,27 @@ class FPIState(TypedDict):
 def _extract_token_usage(raw_msg) -> dict:
     """Pull token counts from an AIMessage's usage_metadata."""
     usage = getattr(raw_msg, "usage_metadata", None) or {}
-    return {
+    result = {
         "prompt": usage.get("input_tokens", 0),
         "completion": usage.get("output_tokens", 0),
         "total": usage.get("total_tokens", 0),
     }
+    details = usage.get("input_token_details") or {}
+    cache_read = details.get("cache_read", 0) or 0
+    cache_creation = details.get("cache_creation", 0) or 0
+    if cache_read or cache_creation:
+        result["cache_read"] = cache_read
+        result["cache_creation"] = cache_creation
+    return result
+
+
+def _cacheable_system_msg(text: str) -> SystemMessage:
+    """Wrap system prompt with cache_control for OpenRouter prompt caching."""
+    return SystemMessage(content=[{
+        "type": "text",
+        "text": text,
+        "cache_control": {"type": "ephemeral"},
+    }])
 
 
 def node_extract(state: FPIState) -> dict:
@@ -131,7 +147,7 @@ def node_extract(state: FPIState) -> dict:
         KeywordExtraction, include_raw=True
     )
     raw_result = model.invoke([
-        SystemMessage(content=_KEYWORD_SYSTEM_MSG),
+        _cacheable_system_msg(_KEYWORD_SYSTEM_MSG),
         HumanMessage(content=state["pdf_text"]),
     ])
     duration_ms = int((time.perf_counter() - t0) * 1000)
@@ -328,7 +344,7 @@ def node_reconcile(state: FPIState) -> dict:
     )
 
     raw_result = model.invoke([
-        SystemMessage(content=_RECONCILE_SYSTEM_MSG),
+        _cacheable_system_msg(_RECONCILE_SYSTEM_MSG),
         HumanMessage(content=human_msg),
     ])
 
@@ -403,7 +419,7 @@ def node_plan(state: FPIState) -> dict:
         f"## Policy Document (for context)\n\n{state['pdf_text']}"
     )
     raw_result = model.invoke([
-        SystemMessage(content=_PLAN_SYSTEM_MSG),
+        _cacheable_system_msg(_PLAN_SYSTEM_MSG),
         HumanMessage(content=human_msg),
     ])
     duration_ms = int((time.perf_counter() - t0) * 1000)
@@ -457,7 +473,7 @@ def node_generate_sql(state: FPIState) -> dict:
         f"{recon_ids_section}"
     )
     raw_result = model.invoke([
-        SystemMessage(content=_SQL_GEN_SYSTEM_MSG),
+        _cacheable_system_msg(_SQL_GEN_SYSTEM_MSG),
         HumanMessage(content=human_msg),
     ])
     duration_ms = int((time.perf_counter() - t0) * 1000)
