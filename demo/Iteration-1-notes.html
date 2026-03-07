@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Iteration 1 — Notes</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=IBM+Plex+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #ffffff;
+    color: #1a1a2e;
+    font-family: 'IBM Plex Sans', sans-serif;
+    width: 320px;
+    padding: 16px;
+  }
+
+  .notes {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .note {
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #374151;
+  }
+  .note strong { color: #111827; }
+  .note.blue { background: #eff6ff; border: 1.5px solid #bfdbfe; }
+  .note.amber { background: #fffbeb; border: 1.5px solid #fde68a; }
+  .note.warm { background: #fffbeb; border: 1.5px solid #fcd34d; }
+  .note.gray { background: #f9fafb; border: 1.5px solid #e5e7eb; }
+  .note .tag {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #6b7280;
+    display: block;
+    margin-bottom: 3px;
+  }
+</style>
+</head>
+<body>
+
+<div class="notes">
+  <div class="note blue">
+    <span class="tag">Why Decompose?</span>
+    Black-box output can't be verified. <strong>3 steps = 3 human review gates.</strong>
+  </div>
+  <div class="note gray">
+    <span class="tag">Full Supervision</span>
+    Every output reviewed. <strong>3–5 min</strong> total. Baseline before autonomy.
+  </div>
+</div>
+
+</body>
+</html>

@@ -50,7 +50,7 @@ AI can read those documents — but it doesn't give you the same answer twice. T
                                        │ (Arize AX)  │
                                        └─────────────┘
 
-  Started as 1 LLM call (black box, 3–5 min total) — decomposed
+  Started as 1 LLM call (black box) — decomposed
   into 3 steps because single-shot output was opaque and impossible
   to verify. No model swapping — locked to GPT-5-mini.
 ```

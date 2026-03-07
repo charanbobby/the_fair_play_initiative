@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Iteration 3</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=IBM+Plex+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #ffffff;
+    color: #1a1a2e;
+    font-family: 'IBM Plex Sans', sans-serif;
+    width: 960px;
+    padding: 28px 32px 24px;
+  }
+
+  .head-row {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    margin-bottom: 22px;
+    border-bottom: 2px solid #e5e7eb;
+    padding-bottom: 10px;
+  }
+  .head-row h1 { font-size: 20px; font-weight: 700; }
+  .head-row .pipe {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: #6b7280;
+  }
+
+  .flow {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    margin-bottom: 14px;
+  }
+
+  .arr { flex-shrink: 0; padding: 0 4px; }
+  .arr svg { width: 26px; height: 14px; }
+
+  .card {
+    background: #fff;
+    border: 2px solid #d1d5db;
+    border-radius: 12px;
+    padding: 14px 12px 10px;
+    text-align: center;
+    position: relative;
+    flex: 1;
+  }
+  .card .step-badge {
+    position: absolute;
+    top: -10px;
+    left: 14px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 20px;
+    letter-spacing: 0.08em;
+  }
+  .card .role {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #9ca3af;
+    margin-bottom: 2px;
+  }
+  .card .name { font-size: 17px; font-weight: 700; }
+  .card .model {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    color: #64748b;
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 20px;
+    margin-top: 3px;
+  }
+  .card .sel {
+    font-size: 7px;
+    background: #dbeafe;
+    padding: 1px 4px;
+    border-radius: 3px;
+    margin-left: 2px;
+    color: #1d4ed8;
+    border: 1px solid #93c5fd;
+    font-weight: 600;
+  }
+  .card .detail {
+    font-size: 9px;
+    color: #6b7280;
+    margin-top: 2px;
+    line-height: 1.3;
+  }
+
+  .cache-badge {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-top: 4px;
+    display: inline-block;
+    letter-spacing: 0.05em;
+  }
+  .cache-badge.hit {
+    background: #d1fae5;
+    color: #065f46;
+    border: 1px solid #6ee7b7;
+  }
+  .cache-badge.miss {
+    background: #f3f4f6;
+    color: #9ca3af;
+    border: 1px solid #d1d5db;
+  }
+
+  .guardrail-box {
+    margin-top: 3px;
+    background: #fef3c7;
+    border: 1px solid #fcd34d;
+    border-radius: 5px;
+    padding: 2px 5px;
+    font-size: 8px;
+    color: #92400e;
+    font-family: 'IBM Plex Mono', monospace;
+    line-height: 1.3;
+  }
+
+  .conflict-box {
+    margin-top: 3px;
+    background: #fef2f2;
+    border: 1px solid #fca5a5;
+    border-radius: 5px;
+    padding: 2px 5px;
+    font-size: 8px;
+    color: #991b1b;
+    font-family: 'IBM Plex Mono', monospace;
+    line-height: 1.3;
+  }
+
+  /* Inline review */
+  .gpb-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    margin-top: 8px;
+    padding-top: 6px;
+    border-top: 1px dashed #e5e7eb;
+  }
+  .gpb-row .rl {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 7px;
+    color: #9ca3af;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-right: 2px;
+  }
+  .gpb-row span.d {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    font-weight: 700;
+    width: 18px;
+    height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+  }
+  .gpb-row .g { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
+  .gpb-row .p { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+  .gpb-row .b { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+
+  /* Upload */
+  .card.upload {
+    border-color: #3b82f6;
+    background: #eff6ff;
+    flex: 0 0 85px;
+  }
+  .card.upload .name { color: #2563eb; font-size: 12px; }
+
+  /* Step colors */
+  .card.s1 { border-color: #3b82f6; }
+  .card.s1 .name { color: #1d4ed8; }
+  .card.s1 .step-badge { background: #dbeafe; color: #1d4ed8; border: 1.5px solid #93c5fd; }
+  .card.s1b { border-color: #f59e0b; }
+  .card.s1b .name { color: #b45309; }
+  .card.s1b .step-badge { background: #fef3c7; color: #92400e; border: 1.5px solid #fcd34d; }
+  .card.s2 { border-color: #7c3aed; }
+  .card.s2 .name { color: #5b21b6; }
+  .card.s2 .step-badge { background: #ede9fe; color: #5b21b6; border: 1.5px solid #c4b5fd; }
+  .card.s3 { border-color: #0891b2; }
+  .card.s3 .name { color: #0e7490; }
+  .card.s3 .step-badge { background: #cffafe; color: #0e7490; border: 1.5px solid #67e8f9; }
+  .card.s4 { border-color: #059669; }
+  .card.s4 .name { color: #047857; }
+  .card.s4 .step-badge { background: #d1fae5; color: #047857; border: 1.5px solid #6ee7b7; }
+
+  .new-inline {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 7px;
+    font-weight: 700;
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fcd34d;
+    padding: 0 4px;
+    border-radius: 3px;
+    margin-left: 3px;
+    vertical-align: middle;
+  }
+
+</style>
+</head>
+<body>
+
+<div class="head-row">
+  <h1>Production Hardening + Prompt Caching</h1>
+  <span class="pipe">semantic guardrails · anti-hallucination · cached prompt prefixes · seed data</span>
+</div>
+
+<div class="flow">
+
+  <div class="card upload">
+    <div class="role">Input</div>
+    <div class="name">Upload<br>Policy PDF</div>
+  </div>
+
+  <div class="arr"><svg viewBox="0 0 26 14" fill="none"><line x1="0" y1="7" x2="18" y2="7" stroke="#9ca3af" stroke-width="2"/><polygon points="18,3 26,7 18,11" fill="#9ca3af"/></svg></div>
+
+  <div class="card s1">
+    <div class="step-badge">STEP 1</div>
+    <div class="role">Extract</div>
+    <div class="name">EXTRACT</div>
+    <div class="model">gemini-3-flash <span class="sel">select</span></div>
+    <div class="detail">~2.1K tokens</div>
+    <div class="guardrail-box">missing fields → NOT FOUND <span class="new-inline">NEW</span></div>
+    <div class="cache-badge miss">&lt; CACHE MIN</div>
+    <div class="gpb-row">
+      <span class="rl">Review</span>
+      <span class="d g">G</span><span class="d p">P</span><span class="d b">B</span>
+    </div>
+  </div>
+
+  <div class="arr"><svg viewBox="0 0 26 14" fill="none"><line x1="0" y1="7" x2="18" y2="7" stroke="#9ca3af" stroke-width="2"/><polygon points="18,3 26,7 18,11" fill="#9ca3af"/></svg></div>
+
+  <div class="card s1b">
+    <div class="step-badge">STEP 1b</div>
+    <div class="role">Reconcile</div>
+    <div class="name">RECONCILE</div>
+    <div class="model">gemini-3-flash <span class="sel">select</span></div>
+    <div class="detail">~1.3K tokens</div>
+    <div class="conflict-box">conflicts · overlaps · dupes</div>
+    <div class="cache-badge miss">&lt; CACHE MIN</div>
+    <div class="gpb-row">
+      <span class="rl">Review</span>
+      <span class="d g">G</span><span class="d p">P</span><span class="d b">B</span>
+    </div>
+  </div>
+
+  <div class="arr"><svg viewBox="0 0 26 14" fill="none"><line x1="0" y1="7" x2="18" y2="7" stroke="#9ca3af" stroke-width="2"/><polygon points="18,3 26,7 18,11" fill="#9ca3af"/></svg></div>
+
+  <div class="card s2">
+    <div class="step-badge">STEP 2</div>
+    <div class="role">Plan</div>
+    <div class="name">PLAN</div>
+    <div class="model">gemini-3-flash <span class="sel">select</span></div>
+    <div class="detail">~8.8K tokens · 21 cache hits</div>
+    <div class="cache-badge hit">CACHED <span class="new-inline">NEW</span></div>
+    <div class="gpb-row">
+      <span class="rl">Review</span>
+      <span class="d g">G</span><span class="d p">P</span><span class="d b">B</span>
+    </div>
+  </div>
+
+  <div class="arr"><svg viewBox="0 0 26 14" fill="none"><line x1="0" y1="7" x2="18" y2="7" stroke="#9ca3af" stroke-width="2"/><polygon points="18,3 26,7 18,11" fill="#9ca3af"/></svg></div>
+
+  <div class="card s3">
+    <div class="step-badge">STEP 3</div>
+    <div class="role">Generate</div>
+    <div class="name">SQL</div>
+    <div class="model">gemini-3-flash <span class="sel">select</span></div>
+    <div class="detail">~8.4K tokens · 16 cache hits</div>
+    <div class="cache-badge hit">CACHED <span class="new-inline">NEW</span></div>
+    <div class="gpb-row">
+      <span class="rl">Review</span>
+      <span class="d g">G</span><span class="d p">P</span><span class="d b">B</span>
+    </div>
+  </div>
+
+  <div class="arr"><svg viewBox="0 0 26 14" fill="none"><line x1="0" y1="7" x2="18" y2="7" stroke="#9ca3af" stroke-width="2"/><polygon points="18,3 26,7 18,11" fill="#9ca3af"/></svg></div>
+
+  <div class="card s4">
+    <div class="step-badge">STEP 4</div>
+    <div class="role">Execute</div>
+    <div class="name">DB WRITE</div>
+    <div class="detail">sandbox (SQLite) · production (PostgreSQL)</div>
+    <div class="guardrail-box" style="background:#d1fae5;border-color:#6ee7b7;color:#065f46;">seed data · full app testable <span class="new-inline">NEW</span></div>
+    <div class="gpb-row">
+      <span class="rl">Review</span>
+      <span class="d g">G</span><span class="d p">P</span><span class="d b">B</span>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

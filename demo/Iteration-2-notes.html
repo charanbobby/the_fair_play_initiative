@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Iteration 2.Notes</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=IBM+Plex+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #ffffff;
+    color: #1a1a2e;
+    font-family: 'IBM Plex Sans', sans-serif;
+    width: 320px;
+    padding: 16px;
+  }
+
+  .notes {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .note {
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #374151;
+  }
+  .note strong { color: #111827; }
+  .note.green { background: #f0fdf4; border: 1.5px solid #86efac; }
+  .note.amber { background: #fffbeb; border: 1.5px solid #fde68a; }
+  .note.blue { background: #eff6ff; border: 1.5px solid #bfdbfe; }
+  .note .tag {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #6b7280;
+    display: block;
+    margin-bottom: 3px;
+  }
+
+  .kpis {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .kpi {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-radius: 8px;
+    padding: 8px 12px;
+    background: #eff6ff;
+    border: 1.5px solid #bfdbfe;
+  }
+  .kpi.green-kpi { background: #f0fdf4; border-color: #86efac; }
+  .kpi.amber-kpi { background: #fffbeb; border-color: #fde68a; }
+  .kpi .num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 20px;
+    font-weight: 700;
+    color: #1d4ed8;
+    white-space: nowrap;
+  }
+  .kpi.green-kpi .num { color: #047857; }
+  .kpi.amber-kpi .num { color: #b45309; }
+  .kpi .txt { font-size: 11px; color: #374151; line-height: 1.4; }
+  .kpi .txt strong { color: #111827; }
+</style>
+</head>
+<body>
+
+<div class="notes">
+  <div class="note green">
+    <span class="tag">Data Integrity</span>
+    Apprentice <strong>checks existing records</strong> before writing. No duplicates.
+  </div>
+  <div class="note amber">
+    <span class="tag">Measuring Trust</span>
+    Compare models on <strong>cost, speed, accuracy</strong>. Evidence for autonomy.
+  </div>
+</div>
+
+<div class="kpis">
+  <div class="kpi green-kpi">
+    <div class="num">31s</div>
+    <div class="txt">Total latency<br><strong>down from 3–5 min</strong></div>
+  </div>
+  <div class="kpi amber-kpi">
+    <div class="num">87%</div>
+    <div class="txt">Good rating<br><strong>measurable trust baseline</strong></div>
+  </div>
+  <div class="kpi">
+    <div class="num">9</div>
+    <div class="txt">Models tested<br><strong>across 71 runs</strong></div>
+  </div>
+</div>
+
+</body>
+</html>

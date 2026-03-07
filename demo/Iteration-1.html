@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Iteration 1</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=IBM+Plex+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #ffffff;
+    color: #1a1a2e;
+    font-family: 'IBM Plex Sans', sans-serif;
+    width: 960px;
+    padding: 28px 32px 24px;
+  }
+
+  .head-row {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    margin-bottom: 22px;
+    border-bottom: 2px solid #e5e7eb;
+    padding-bottom: 10px;
+  }
+  .head-row h1 { font-size: 20px; font-weight: 700; }
+  .head-row .pipe {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: #6b7280;
+  }
+
+  .flow {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    margin-bottom: 20px;
+  }
+
+  .arr { flex-shrink: 0; padding: 0 6px; }
+  .arr svg { width: 36px; height: 14px; }
+
+  .card {
+    background: #fff;
+    border: 2px solid #d1d5db;
+    border-radius: 12px;
+    padding: 14px 16px 10px;
+    text-align: center;
+    position: relative;
+    flex: 1;
+  }
+  .card .step-badge {
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 20px;
+    letter-spacing: 0.08em;
+  }
+  .card .role {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #9ca3af;
+    margin-bottom: 2px;
+  }
+  .card .name { font-size: 20px; font-weight: 700; }
+  .card .model {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: #64748b;
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 20px;
+    margin-top: 4px;
+  }
+  .card .model .lk {
+    font-size: 9px;
+    background: #e2e8f0;
+    padding: 1px 5px;
+    border-radius: 3px;
+    margin-left: 3px;
+    color: #475569;
+    border: 1px solid #cbd5e1;
+  }
+  .card .time {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: #9ca3af;
+    margin-top: 3px;
+  }
+
+  /* Inline review — bottom of each card */
+  .gpb-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    margin-top: 8px;
+    padding-top: 7px;
+    border-top: 1px dashed #e5e7eb;
+  }
+  .gpb-row .rl {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8px;
+    color: #9ca3af;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-right: 2px;
+  }
+  .gpb-row span.d {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    width: 20px;
+    height: 20px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+  }
+  .gpb-row .g { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
+  .gpb-row .p { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+  .gpb-row .b { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+
+  /* Upload */
+  .card.upload {
+    border-color: #3b82f6;
+    background: #eff6ff;
+    flex: 0 0 100px;
+  }
+  .card.upload .name { color: #2563eb; font-size: 14px; }
+
+  /* Step colors */
+  .card.s1 { border-color: #3b82f6; }
+  .card.s1 .name { color: #1d4ed8; }
+  .card.s1 .step-badge { background: #dbeafe; color: #1d4ed8; border: 1.5px solid #93c5fd; }
+  .card.s2 { border-color: #7c3aed; }
+  .card.s2 .name { color: #5b21b6; }
+  .card.s2 .step-badge { background: #ede9fe; color: #5b21b6; border: 1.5px solid #c4b5fd; }
+  .card.s3 { border-color: #0891b2; }
+  .card.s3 .name { color: #0e7490; }
+  .card.s3 .step-badge { background: #cffafe; color: #0e7490; border: 1.5px solid #67e8f9; }
+
+  /* ── BOTTOM ── */
+  .bottom {
+    display: flex;
+    gap: 12px;
+  }
+  .note {
+    flex: 1;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #374151;
+  }
+  .note strong { color: #111827; }
+  .note.blue { background: #eff6ff; border: 1.5px solid #bfdbfe; }
+  .note.amber { background: #fffbeb; border: 1.5px solid #fde68a; }
+  .note.warm { background: #fffbeb; border: 1.5px solid #fcd34d; }
+  .note.gray { background: #f9fafb; border: 1.5px solid #e5e7eb; }
+  .note .tag {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #6b7280;
+    display: block;
+    margin-bottom: 3px;
+  }
+</style>
+</head>
+<body>
+
+<div class="head-row">
+  <h1>Policy PDF → SQL Pipeline</h1>
+  <span class="pipe">3-step decomposition · single model · human-gated</span>
+</div>
+
+<div class="flow">
+
+  <div class="card upload">
+    <div class="role">Input</div>
+    <div class="name">Upload<br>Policy PDF</div>
+  </div>
+
+  <div class="arr"><svg viewBox="0 0 36 14" fill="none"><line x1="0" y1="7" x2="28" y2="7" stroke="#9ca3af" stroke-width="2"/><polygon points="28,3 36,7 28,11" fill="#9ca3af"/></svg></div>
+
+  <div class="card s1">
+    <div class="step-badge">STEP 1</div>
+    <div class="role">Extract</div>
+    <div class="name">EXTRACT</div>
+    <div class="model">gpt-5-mini <span class="lk">locked</span></div>
+    <div class="gpb-row">
+      <span class="rl">Review</span>
+      <span class="d g">G</span><span class="d p">P</span><span class="d b">B</span>
+    </div>
+  </div>
+
+  <div class="arr"><svg viewBox="0 0 36 14" fill="none"><line x1="0" y1="7" x2="28" y2="7" stroke="#9ca3af" stroke-width="2"/><polygon points="28,3 36,7 28,11" fill="#9ca3af"/></svg></div>
+
+  <div class="card s2">
+    <div class="step-badge">STEP 2</div>
+    <div class="role">Plan</div>
+    <div class="name">PLAN</div>
+    <div class="model">gpt-5-mini <span class="lk">locked</span></div>
+    <div class="gpb-row">
+      <span class="rl">Review</span>
+      <span class="d g">G</span><span class="d p">P</span><span class="d b">B</span>
+    </div>
+  </div>
+
+  <div class="arr"><svg viewBox="0 0 36 14" fill="none"><line x1="0" y1="7" x2="28" y2="7" stroke="#9ca3af" stroke-width="2"/><polygon points="28,3 36,7 28,11" fill="#9ca3af"/></svg></div>
+
+  <div class="card s3">
+    <div class="step-badge">STEP 3</div>
+    <div class="role">Generate</div>
+    <div class="name">SQL</div>
+    <div class="model">gpt-5-mini <span class="lk">locked</span></div>
+    <div class="gpb-row">
+      <span class="rl">Review</span>
+      <span class="d g">G</span><span class="d p">P</span><span class="d b">B</span>
+    </div>
+  </div>
+
+</div>
+
+
+</body>
+</html>
