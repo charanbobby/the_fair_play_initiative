@@ -142,7 +142,7 @@
               <h1 class="text-xl font-bold">The Fair Play Initiative</h1>
               <p class="text-xs text-slate-400">
                 Balanced Attendance Management
-                <span class="ml-2 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.10.22</span>
+                <span class="ml-2 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.10.23</span>
                 <span id="playground-badge" class="ml-1 bg-amber-500 text-amber-50 text-xs font-mono px-1.5 py-0.5 rounded hidden">Playground</span>
               </p>
             </div>
@@ -1593,7 +1593,8 @@
         // Blended: assume ~60% input, 40% output for typical analysis workload
         const blended = c[0] * 0.6 + c[1] * 0.4;
         const per10k = blended / 100; // $/M → $/10K
-        return per10k < 0.01 ? `$${per10k.toFixed(4)}` : `$${per10k.toFixed(3)}`;
+        const cents = per10k * 100;
+        return cents < 1 ? `${cents.toFixed(2)}¢` : `${cents.toFixed(1)}¢`;
       }
 
       const _MODEL_NOTES = {
@@ -1666,7 +1667,8 @@
                 if (c && s.avg_tokens > 0) {
                   const blended = c[0] * 0.6 + c[1] * 0.4;
                   const estCost = (s.avg_tokens / 1_000_000) * blended;
-                  tokenPart += ` · Est. <span class="font-mono text-indigo-600">$${estCost < 0.01 ? estCost.toFixed(4) : estCost.toFixed(3)}</span>/run`;
+                  const estCents = estCost * 100;
+                  tokenPart += ` · Est. <span class="font-mono text-indigo-600">${estCents < 1 ? estCents.toFixed(2) : estCents.toFixed(1)}¢</span>/run`;
                 }
                 // Avg speed
                 if (s.avg_duration_ms > 0) {
@@ -2983,10 +2985,10 @@
             let savingsText = "";
             if (c) {
               const savedPerM = c[0] * 0.9; // 90% discount on input price
-              const saved = (cacheRead / 1_000_000) * savedPerM;
-              savingsText = saved >= 0.01
-                ? ` · saved $${saved.toFixed(3)}`
-                : ` · saved $${saved.toFixed(4)}`;
+              const savedCents = (cacheRead / 1_000_000) * savedPerM * 100;
+              savingsText = savedCents < 1
+                ? ` · saved ${savedCents.toFixed(2)}¢`
+                : ` · saved ${savedCents.toFixed(1)}¢`;
             }
             cacheEl.textContent = "CACHED " + cacheRead.toLocaleString() + savingsText;
             cacheEl.className = "ml-1 bg-green-100 text-green-700 font-mono font-semibold px-1.5 py-0.5 rounded text-[10px]";
