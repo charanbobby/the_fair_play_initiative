@@ -8,7 +8,7 @@ Your extraction remit includes, but is not limited to:
 
 CRITICAL — extract these metadata fields explicitly (downstream steps depend on them):
 - **organization:** company name, facility/site name, any internal codes or abbreviations
-- **region:** country, state/province, city, plant/site location, any timezone references (shift schedules, operating hours), and all cited labor law statutes (e.g. FMLA, ADA, USERRA, EU Working Time Directive)
+- **region:** country, state/province, city, plant/site location, any timezone references (shift schedules, operating hours). Do NOT include legal statutes here — FMLA, ADA, USERRA, PTO, workers comp, EU Working Time Directive, etc. are labor-law attributes that belong in the region's `labor_laws` field or as exemption rules, NOT as separate region entities.
 - **policy:** policy title/name, document number/code, effective date, revision date, scope (who it covers)
 
 # Extraction Process

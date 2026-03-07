@@ -327,7 +327,7 @@ class DashboardStats(BaseModel):
 class KeywordExtraction(BaseModel):
     policy: list[str] = Field(default_factory=list, description="Policy-level keywords: codes, names, framework attributes, accrual model type, and scope.")
     organization: list[str] = Field(default_factory=list, description="Organization names and identifiers.")
-    region: list[str] = Field(default_factory=list, description="Region names, jurisdictions, and applicable labor laws.")
+    region: list[str] = Field(default_factory=list, description="Geographic region names and jurisdictions only. Do NOT include legal statutes (FMLA, ADA, USERRA, PTO, etc.) — those belong in rule or other_relevant_terms.")
     rule: list[str] = Field(default_factory=list, description="Rule names, tier definitions, conditions, point thresholds, and escalation criteria.")
     attendance_log: list[str] = Field(default_factory=list, description="Attendance event types, violation definitions, scheduled vs actual time terms, and log statuses.")
     point_history: list[str] = Field(default_factory=list, description="Point accrual, expiration, active status, and reason classification terms.")

@@ -26,6 +26,7 @@ Detect when an extracted entity (organization, region, or policy) refers to the 
 - Compare extracted region/location references against existing region **names** AND **codes**.
 - Match if they refer to the same geographic jurisdiction or regulatory area.
 - Consider timezone and labor law context for disambiguation (e.g., "Detroit" and "US Midwest" with same timezone are likely the same region).
+- **IMPORTANT:** If an extracted "region" keyword is actually a legal statute or leave type (e.g. FMLA, ADA, USERRA, PTO, workers comp, EU Working Time Directive), DISCARD it from region matching entirely. These are NOT geographic entities — they belong in the `region.labor_laws` field or as exemption rule rows. Place them in `no_match_entities` with a note like `"region:FMLA (statute, not a region)"`.
 - Same confidence scale as organizations.
 
 ### Policy matching
