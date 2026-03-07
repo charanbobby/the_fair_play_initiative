@@ -77,15 +77,21 @@ _RECONCILE_SYSTEM_MSG: str = (_PROMPTS_DIR / "01b_reconciliation.md").read_text(
 # LLM — ChatOpenAI pointed at OpenRouter
 # ---------------------------------------------------------------------------
 
-def _build_model(model_override: str | None = None) -> ChatOpenAI:
+def _build_model(
+    model_override: str | None = None,
+    max_tokens: int | None = None,
+) -> ChatOpenAI:
     api_key = settings.OPENROUTER_API_KEY or settings.OPENAI_API_KEY
     model_name = model_override or settings.LLM_MODEL or "gpt-4o-mini"
-    return ChatOpenAI(
+    kwargs: dict = dict(
         model=model_name,
         base_url="https://openrouter.ai/api/v1",
         api_key=api_key,
         temperature=0,
     )
+    if max_tokens is not None:
+        kwargs["max_tokens"] = max_tokens
+    return ChatOpenAI(**kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -412,9 +418,9 @@ def node_plan(state: FPIState) -> dict:
 
     import time
     t0 = time.perf_counter()
-    model = _build_model(state.get("model_plan")).with_structured_output(
-        SQLQueryPlan, include_raw=True
-    )
+    model = _build_model(
+        state.get("model_plan"), max_tokens=32768
+    ).with_structured_output(SQLQueryPlan, include_raw=True)
     recon = state.get("reconciliation")
     recon_section = ""
     if recon and not recon.is_pass_through:
@@ -460,9 +466,9 @@ def node_generate_sql(state: FPIState) -> dict:
 
     import time
     t0 = time.perf_counter()
-    model = _build_model(state.get("model_sql")).with_structured_output(
-        SQLGeneration, include_raw=True
-    )
+    model = _build_model(
+        state.get("model_sql"), max_tokens=32768
+    ).with_structured_output(SQLGeneration, include_raw=True)
     recon = state.get("reconciliation")
     recon_ids_section = ""
     if recon and not recon.is_pass_through and recon.existing_ids:
