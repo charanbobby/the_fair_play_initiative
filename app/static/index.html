@@ -2970,19 +2970,36 @@
             (tokenData.sql_total || 0).toLocaleString();
           document.getElementById("tokens-sql-wrapper").classList.remove("hidden");
         }
-        // Show cache hit/write indicator
+        // Show cache hit/write indicator with cost savings
         const cacheRead = tokenData[step + "_cache_read"] || 0;
         const cacheCreation = tokenData[step + "_cache_creation"] || 0;
         const cacheEl = document.getElementById("cache-" + step);
         if (cacheEl) {
           if (cacheRead > 0) {
-            cacheEl.textContent = "CACHED " + cacheRead.toLocaleString();
+            // Estimate savings: cached tokens cost 10% of normal input price
+            const modelId = _getActiveModelForStep(step);
+            const c = _MODEL_COST[modelId];
+            let savingsText = "";
+            if (c) {
+              const savedPerM = c[0] * 0.9; // 90% discount on input price
+              const saved = (cacheRead / 1_000_000) * savedPerM;
+              savingsText = saved >= 0.01
+                ? ` · saved $${saved.toFixed(3)}`
+                : ` · saved $${saved.toFixed(4)}`;
+            }
+            cacheEl.textContent = "CACHED " + cacheRead.toLocaleString() + savingsText;
             cacheEl.className = "ml-1 bg-green-100 text-green-700 font-mono font-semibold px-1.5 py-0.5 rounded text-[10px]";
           } else if (cacheCreation > 0) {
             cacheEl.textContent = "CACHE WRITE " + cacheCreation.toLocaleString();
             cacheEl.className = "ml-1 bg-yellow-100 text-yellow-700 font-mono font-semibold px-1.5 py-0.5 rounded text-[10px]";
           }
         }
+      }
+
+      /** Get the currently selected model for a pipeline step. */
+      function _getActiveModelForStep(step) {
+        const el = document.getElementById("llm-model-" + step);
+        return el ? el.value : null;
       }
 
       function renderReconcileOnly(recon) {
@@ -3594,6 +3611,10 @@
         document.getElementById("plain-sql-wrapper").classList.add("hidden");
         document.getElementById("token-usage").classList.add("hidden");
         document.getElementById("tokens-sql-wrapper").classList.add("hidden");
+        ["extract","reconcile","plan","sql"].forEach(s => {
+          const el = document.getElementById("cache-" + s);
+          if (el) { el.className = "hidden"; el.textContent = ""; }
+        });
         document.getElementById("execute-sql-btn-wrapper")?.remove();
         _lastAnalysisData = null;
         // Reset feedback buttons
