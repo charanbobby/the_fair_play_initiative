@@ -76,20 +76,29 @@ _llm = None
 STATIC_DIR = Path(__file__).parent / "static"
 
 
+def _sync_db_init():
+    """Blocking DB init — runs in a thread so it cannot stall uvicorn."""
+    models.Base.metadata.create_all(bind=engine)
+    from app.seed import seed
+    db = SessionLocal()
+    try:
+        seed(db)
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _llm
+    import asyncio
     try:
-        logger.info("startup: creating database tables")
-        models.Base.metadata.create_all(bind=engine)
-
-        logger.info("startup: seeding database")
-        from app.seed import seed
-        db = SessionLocal()
-        try:
-            seed(db)
-        finally:
-            db.close()
+        logger.info("startup: creating database tables + seeding (15s timeout)")
+        await asyncio.wait_for(
+            asyncio.to_thread(_sync_db_init),
+            timeout=15,
+        )
+    except asyncio.TimeoutError:
+        logger.warning("startup: database init timed out after 15s — skipping")
     except Exception as exc:
         logger.warning("startup: database init failed (will retry on first request): %s", exc)
 
@@ -107,7 +116,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Apprentice — Fair Play Initiative API",
     description="FastAPI backend for Apprentice: verifiable agentic workflows. First domain: Fair Play Initiative (workforce attendance compliance).",
-    version="0.10.18",
+    version="0.10.19",
     lifespan=lifespan,
     redirect_slashes=False,
 )
