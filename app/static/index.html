@@ -136,7 +136,7 @@
               <h1 class="text-xl font-bold">The Fair Play Initiative</h1>
               <p class="text-xs text-slate-400">
                 Balanced Attendance Management
-                <span class="ml-2 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.10.0</span>
+                <span class="ml-2 bg-indigo-600 text-indigo-100 text-xs font-mono px-1.5 py-0.5 rounded">v0.10.1</span>
                 <span id="playground-badge" class="ml-1 bg-amber-500 text-amber-50 text-xs font-mono px-1.5 py-0.5 rounded hidden">Playground</span>
               </p>
             </div>
@@ -705,9 +705,9 @@
             <!-- Populated by JS when org selected -->
           </div>
 
-          <!-- Active Rules -->
-          <div class="mt-8">
-            <h4 class="text-md font-semibold text-slate-800 mb-4">
+          <!-- Active Rules (hidden until org selected) -->
+          <div class="mt-8 hidden">
+            <h4 id="active-rules-heading" class="text-md font-semibold text-slate-800 mb-4">
               Active Policy Rules
             </h4>
             <div id="active-rules-list" class="space-y-3">
@@ -3528,9 +3528,23 @@
           detailContainer.classList.add("hidden");
         }
 
-        document.getElementById("active-rules-list").innerHTML = state.rules
-          .map(
-            (rule) => `
+        // Active rules: only show when an org is selected
+        const rulesContainer = document.getElementById("active-rules-list");
+        const rulesHeading = rulesContainer?.closest(".mt-8");
+        if (state.currentOrganization) {
+          const org = state.organizations.find(
+            (o) => o.id === state.currentOrganization,
+          );
+          const orgRules = org
+            ? org.policies.flatMap((p) => p.rules)
+            : state.rules;
+          const heading = document.getElementById("active-rules-heading");
+          if (heading) heading.textContent = org ? `${org.name} — Active Policy Rules` : "Active Policy Rules";
+          if (rulesHeading) rulesHeading.classList.remove("hidden");
+          rulesContainer.innerHTML = orgRules.length
+            ? orgRules
+                .map(
+                  (rule) => `
                 <div class="flex items-center justify-between p-4 bg-slate-50 rounded-xl">
                     <div class="flex items-center gap-4">
                         <div class="bg-indigo-100 p-2 rounded-lg">
@@ -3556,8 +3570,12 @@
                     </div>
                 </div>
             `,
-          )
-          .join("");
+                )
+                .join("")
+            : '<p class="text-sm text-slate-400 italic">No rules defined for this organization.</p>';
+        } else {
+          if (rulesHeading) rulesHeading.classList.add("hidden");
+        }
         lucide.createIcons();
       }
 
