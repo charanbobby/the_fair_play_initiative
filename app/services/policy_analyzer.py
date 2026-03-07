@@ -22,8 +22,14 @@ import asyncio
 import io
 import json
 import re
+import warnings
 from pathlib import Path
 from typing import AsyncGenerator, TypedDict
+
+# Suppress harmless Pydantic v2 serializer warning from LangChain's
+# with_structured_output(include_raw=True) — the "parsed" field type
+# annotation is Optional but always populated on success.
+warnings.filterwarnings("ignore", message="Pydantic serializer warnings")
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
