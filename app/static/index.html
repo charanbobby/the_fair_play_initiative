@@ -1678,6 +1678,9 @@
           .catch(() => { statsEl.classList.add("hidden"); });
       }
 
+      // ── Newly-ingested policy tracking (for "NEW" badge) ─────────────
+      let _newPolicyIds = new Set();
+
       // ── Per-step feedback ─────────────────────────────────────────────
       let _lastAnalysisData = null;
 
@@ -1777,15 +1780,26 @@
             regionId: p.region_id,
             active: p.active,
             effectiveDate: p.effective_date,
-            rules: (p.rules || []).map((r) => ({
-              id: r.id,
-              name: r.name,
-              condition: r.condition,
-              threshold: r.threshold,
-              points: r.points,
-              description: r.description,
-              active: r.active,
-            })),
+            rules: (() => {
+              const seen = new Set();
+              return (p.rules || [])
+                .filter((r) => {
+                  const key = `${r.name}::${r.points}`;
+                  if (seen.has(key)) return false;
+                  seen.add(key);
+                  return true;
+                })
+                .map((r) => ({
+                  id: r.id,
+                  name: r.name,
+                  condition: r.condition,
+                  threshold: r.threshold,
+                  points: r.points,
+                  description: r.description,
+                  active: r.active,
+                }))
+                .sort((a, b) => a.points - b.points);
+            })(),
           }));
 
           // Organizations — attach full policy objects
@@ -3479,12 +3493,30 @@
             </tr>`;
             execHTML += `</tbody></table></div>`;
 
+            // Track existing policy IDs so we can badge new ones
+            const prevPolicyIds = new Set(state.policies.map(p => p.id));
             loadDataFromAPI().then(() => {
+              const newPolicies = state.policies.filter(p => !prevPolicyIds.has(p.id));
+              _newPolicyIds = new Set(newPolicies.map(p => p.id));
               populateOrganizationFilter();
               renderDashboard();
+              // Auto-select the org of the newly ingested policy
+              if (newPolicies.length > 0) {
+                const newOrgId = newPolicies[0].organizationId;
+                state.currentOrganization = newOrgId;
+                const orgFilter = document.getElementById("policy-org-filter");
+                if (orgFilter) orgFilter.value = newOrgId;
+                // Switch to Policies tab
+                switchTab("policies");
+              }
               renderActiveRules();
               lucide.createIcons();
-              showToast("Dashboard refreshed with ingested data!");
+              const newNames = newPolicies.map(p => p.name);
+              if (newNames.length > 0) {
+                showToast(`New policy added: ${newNames.join(", ")}`);
+              } else {
+                showToast("Dashboard refreshed with ingested data!");
+              }
             });
           }
 
@@ -3635,15 +3667,18 @@
                             ${org.policies
                               .map(
                                 (policy) => `
-                                <div class="bg-white border border-slate-200 rounded-xl p-4">
+                                <div class="bg-white border ${_newPolicyIds.has(policy.id) ? "border-indigo-400 ring-2 ring-indigo-100" : "border-slate-200"} rounded-xl p-4">
                                     <div class="flex items-center justify-between mb-3">
-                                        <div>
+                                        <div class="flex items-center gap-2">
                                             <h5 class="font-medium text-slate-800">${policy.name}</h5>
-                                            <p class="text-sm text-slate-500">Region: ${getRegionName(policy.regionId)} • Effective: ${policy.effectiveDate}</p>
+                                            ${_newPolicyIds.has(policy.id) ? '<span class="text-[10px] font-bold uppercase tracking-wider bg-indigo-500 text-white px-1.5 py-0.5 rounded">NEW</span>' : ""}
                                         </div>
-                                        <span class="status-badge ${policy.active ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}">
-                                            ${policy.active ? "Active" : "Inactive"}
-                                        </span>
+                                        <div class="flex items-center gap-2">
+                                            <p class="text-sm text-slate-500">Region: ${getRegionName(policy.regionId)} • Effective: ${policy.effectiveDate}</p>
+                                            <span class="status-badge ${policy.active ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}">
+                                                ${policy.active ? "Active" : "Inactive"}
+                                            </span>
+                                        </div>
                                     </div>
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                         ${policy.rules
