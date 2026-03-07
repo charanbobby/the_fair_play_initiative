@@ -24,7 +24,7 @@
 
 - **Security:** SQL execution is locked to Playground mode only (SQLite sandbox). Production PostgreSQL deployments cannot execute AI-generated SQL. Playground can be reset/seeded at any time without risk.
 - **Compliance:** Every pipeline step produces a reviewable artifact. Human ratings (Good / Partial / Bad) are persisted per step. Token usage, latency, and model identity logged to `AnalysisLog` for full traceability.
-- **Cost:** Target under $0.05 per policy analysis (~$0.02–0.03 actual with gpt-5-mini). No fine-tuned models — only prompt engineering, prompt distillation, and few-shot examples to maintain iteration speed and cost predictability.
+- **Cost:** Target under $0.05 per policy analysis (~$0.01–0.03 actual; as low as ~$0.005 with gemini-3-flash). No fine-tuned models — only prompt engineering, prompt distillation, and few-shot examples to maintain iteration speed and cost predictability.
 
 ### Template 1: Supervised Pipeline *(High Control, Low Agency)*
 
@@ -59,8 +59,8 @@
 | Itr | Cost / Latency Factors | Optimizations | Guardrails | Eval Metrics |
 |-----|----------------------|---------------|------------|--------------|
 | **1** | 1 LLM call per document (single-shot extraction + SQL) | Meta-prompting, schema-aware structured output (Pydantic) | Human reviews 100% of outputs; playground-only execution | Keyword accuracy, SQL syntax validity, confidence score |
-| **2** | 3 LLM calls per document (extract → plan → generate SQL); heterogeneous model routing | Prompt distillation (Sonnet 4.6 → gpt-5-mini); per-step model selectors; structured plan as verification gate | Human review at plan stage; rule exclusion guardrails (8 categories); expected rule count bounds (10–30); confidence deduction rubric | Rule count vs. expected, plan–SQL alignment, per-step human ratings, token usage per model per step |
-| **3** | 4 LLM calls (extract + reconcile + plan + SQL); entity reconciliation adds ~1 call when DB has existing records (zero-cost pass-through on empty DB) | Feedback loop: human ratings → model comparison → confidence thresholds; **Entity reconciliation:** LLM fuzzy-matches extracted orgs/policies/regions against existing DB records (handles typos, abbreviations, name variations); deterministic conflict detection (date overlaps, active-policy overwrites); matched IDs flow downstream so plan/SQL reuse existing records instead of creating duplicates | Auto-approve >90% confidence; flag low-confidence for HTL; playground/production mode isolation; rollback on SQL failure; reconciliation gate (0.7 confidence threshold for ID reuse); conflict warnings surfaced before execution | End-to-end success rate, model rating % (good/partial/bad), time-to-ingest, cost per policy, entity match accuracy, conflict detection rate |
+| **2** | 3 LLM calls per document (extract → plan → generate SQL); heterogeneous model routing; **Extract:** ~3s/2.2K tok (gemini-3.1-flash-lite), ~5s/2.8K tok (gemini-3-flash), ~63s/4.8K tok (gpt-5-mini); **Plan:** ~7s/8.6K tok (gemini-3.1-flash-lite), ~16s/9K tok (gemini-3-flash), ~124s/13.7K tok (gpt-5-mini); **SQL:** ~6s/7.5K tok (gemini-3-flash), ~68s/11.3K tok (gpt-5-mini) | Prompt distillation (Sonnet 4.6 → gpt-5-mini → gemini-3-flash); per-step model selectors; structured plan as verification gate | Human review at plan stage; rule exclusion guardrails (8 categories); expected rule count bounds (10–30); confidence deduction rubric | Rule count vs. expected, plan–SQL alignment, per-step human ratings, token usage per model per step |
+| **3** | 4 LLM calls (extract + reconcile + plan + SQL); **Full pipeline:** ~31s/~21K tokens (gemini-3-flash), ~258s/~31K tokens (gpt-5-mini), ~$0.01–0.03 per policy; entity reconciliation adds ~1 call when DB has existing records (zero-cost pass-through on empty DB); **43 production runs across 7+ models** (Gemini, GPT, Claude, DeepSeek, Mistral) | Feedback loop: human ratings → model comparison → confidence thresholds; **Entity reconciliation:** LLM fuzzy-matches extracted orgs/policies/regions against existing DB records (handles typos, abbreviations, name variations); deterministic conflict detection (date overlaps, active-policy overwrites); matched IDs flow downstream so plan/SQL reuse existing records instead of creating duplicates | Auto-approve >90% confidence; flag low-confidence for HTL; playground/production mode isolation; rollback on SQL failure; reconciliation gate (0.7 confidence threshold for ID reuse); conflict warnings surfaced before execution | End-to-end success rate, model rating % (good/partial/bad), time-to-ingest, cost per policy, entity match accuracy, conflict detection rate |
 
 ---
 
@@ -174,10 +174,10 @@ This decomposition is what enabled every subsequent optimization: prompt distill
 
 ### Prompt Distillation (proven technique)
 
-- Run a strong model (Claude Sonnet 4.6) once on the planning step — 90s, 14,920 tokens, confidence 0.87
+- Run a strong model (Claude Sonnet 4.6) once on the planning step — 36s, 12,164 tokens, confidence 0.87
 - Extract the 6 structural reasoning patterns it discovered (INSERT order, ID chaining, rule granularity, value derivation, natural keys, existence checks)
-- Encode those patterns as explicit guidance in a cheaper model's (gpt-5-mini) system prompt
-- Result: same output quality at 1/10th the cost, no fine-tuning needed, instantly reversible
+- Encode those patterns as explicit guidance in cheaper models' system prompts
+- Result: gemini-3-flash achieves same quality at ~40x cost reduction (16s, 9K tok, ~$0.003/run); gemini-3.1-flash-lite at ~120x reduction (7s, 8.6K tok, ~$0.001/run). No fine-tuning, no training data, instantly reversible
 
 ---
 
@@ -187,7 +187,7 @@ This decomposition is what enabled every subsequent optimization: prompt distill
 
 2. **The plan is the product.** The extraction and SQL are implementation details. The structured plan is what a compliance officer can actually read and approve. This is the verification gate.
 
-3. **Prompt distillation > fine-tuning** for iteration speed. Run a strong model once, encode its reasoning into a cheaper model's prompt. No training data, no GPU time, instantly reversible.
+3. **Prompt distillation > fine-tuning** for iteration speed. Run a strong model once, encode its reasoning into cheaper models' prompts. 40–120x cost reduction (Sonnet → gemini-flash), no training data, no GPU time, instantly reversible.
 
 4. **Playground mode is not optional.** AI-generated SQL must never touch production without human approval. The sandbox/production split is a core architectural decision, not a convenience feature.
 

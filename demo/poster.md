@@ -24,7 +24,7 @@
 
 - **Security:** SQL execution locked to Playground mode only (SQLite sandbox). Production PostgreSQL cannot execute AI-generated SQL.
 - **Compliance:** Every step produces a reviewable artifact. Human ratings persisted per step. Token usage, latency, model identity logged for traceability.
-- **Cost:** Target < $0.05 per policy (~$0.02–0.03 actual with gpt-5-mini). No fine-tuned models — prompt engineering + distillation only.
+- **Cost:** Target < $0.05 per policy (~$0.01–0.03 actual; as low as ~$0.005 with gemini-3-flash). No fine-tuned models — prompt engineering + distillation only.
 
 ### Template 1: Supervised Pipeline *(High Control, Low Agency)*
 
@@ -42,23 +42,35 @@ LLM reads policy revisions → diffs against existing rules → updates autonomo
 
 ## ITERATION TABLE
 
-*Live production data from 27 analysis runs (Supabase PostgreSQL)*
+*Live production data from 43 analysis runs across 7+ models (Supabase PostgreSQL)*
 
 | Itr | Cost / Latency | Optimizations | Guardrails | Eval Metrics |
 |-----|---------------|---------------|------------|--------------|
 | **1** | 1 LLM call; single-shot extract+SQL; **black box** — opaque SQL, hard to verify what the AI decided | Meta-prompting (ChatGPT Playground, multi-shot samples) to define structured output shape + SQL plan templates; Pydantic models via `litellm + instructor` | Human reviews 100%; playground-only | Keyword accuracy, SQL validity, confidence |
-| **2** | 3 LLM calls — **decomposed because Itr 1 was a black box** (opaque SQL, no way to verify AI reasoning); **Extract:** ~10s/2.5K tok (gpt-4o-mini), ~31s/4.3K tok (gpt-5-mini); **Plan:** ~64s/9.5K tok (gpt-4o-mini), ~105s/13.3K tok (gpt-5-mini); **SQL:** ~52s/9.3K tok (gpt-5-mini) | Prompt distillation (Sonnet 4.6 → gpt-5-mini); per-step model selectors; **plan as verification gate**; **RAG experiment (negative result):** ChromaDB retrieval retrieved 97.3% of document (20/26 chunks), added 1.8x latency (584.8s vs 316.7s) and +80% tokens (64.6K vs 36K) — pure overhead for single-document exhaustive extraction. Full-text input is the right approach here; RAG adds value only for multi-document querying. | Human review at plan stage; rule exclusion guardrails (8 categories); rule count bounds (10–30); confidence deduction rubric | Rule count vs expected, plan–SQL alignment, per-step ratings, tokens per model per step |
-| **3** | 4 calls (+ reconciliation); **Full pipeline:** ~188s, ~27K tokens, ~$0.02–0.03 per policy | Feedback loop: human ratings → model comparison → confidence thresholds; **Entity reconciliation:** LLM-powered fuzzy matching of orgs/policies/regions against existing DB records (handles typos, abbreviations, name variations); deterministic conflict detection (date overlaps, active-policy overwrites); **Prompt refinement:** killed `[PLACEHOLDER]` passthrough, few-shot SQL example, field semantics, self-validation checklist | Rule exclusion guardrails; confidence deduction rubric; playground/production mode isolation; rollback on SQL failure; entity reconciliation gate (0.7 confidence threshold); conflict warnings before execution | Model rating %, cost per policy, time-to-ingest, placeholder leak rate (0%), entity match accuracy, false-positive rate |
+| **2** | 3 LLM calls — **decomposed because Itr 1 was a black box** (opaque SQL, no way to verify AI reasoning); **Extract:** ~3s/2.2K tok (gemini-3.1-flash-lite), ~5s/2.8K tok (gemini-3-flash), ~63s/4.8K tok (gpt-5-mini); **Plan:** ~7s/8.6K tok (gemini-3.1-flash-lite), ~16s/9K tok (gemini-3-flash), ~124s/13.7K tok (gpt-5-mini); **SQL:** ~6s/7.5K tok (gemini-3-flash), ~68s/11.3K tok (gpt-5-mini) | Prompt distillation (Sonnet 4.6 → gpt-5-mini); per-step model selectors; **plan as verification gate**; **RAG experiment (negative result):** ChromaDB retrieval retrieved 97.3% of document (20/26 chunks), added 1.8x latency (584.8s vs 316.7s) and +80% tokens (64.6K vs 36K) — pure overhead for single-document exhaustive extraction. Full-text input is the right approach here; RAG adds value only for multi-document querying. | Human review at plan stage; rule exclusion guardrails (8 categories); rule count bounds (10–30); confidence deduction rubric | Rule count vs expected, plan–SQL alignment, per-step ratings, tokens per model per step |
+| **3** | 4 calls (+ reconciliation); **Full pipeline:** ~31s/~21K tokens (gemini-3-flash), ~258s/~31K tokens (gpt-5-mini), ~$0.01–0.03 per policy | Feedback loop: human ratings → model comparison → confidence thresholds; **Entity reconciliation:** LLM-powered fuzzy matching of orgs/policies/regions against existing DB records (handles typos, abbreviations, name variations); deterministic conflict detection (date overlaps, active-policy overwrites); **Prompt refinement:** killed `[PLACEHOLDER]` passthrough, few-shot SQL example, field semantics, self-validation checklist; **Multi-model evaluation:** 7+ models tested (Gemini, GPT, Claude, DeepSeek, Mistral) | Rule exclusion guardrails; confidence deduction rubric; playground/production mode isolation; rollback on SQL failure; entity reconciliation gate (0.7 confidence threshold); conflict warnings before execution | Model rating %, cost per policy, time-to-ingest, placeholder leak rate (0%), entity match accuracy, false-positive rate |
 
-### Production Model Stats (from Supabase `analysis_logs`)
+### Production Model Stats (from Supabase `analysis_logs` — 43 runs, 7+ models)
 
 | Step | Model | Runs | Avg Tokens | Avg Latency | Feedback |
 |------|-------|------|-----------|-------------|----------|
-| Extract | gpt-4o-mini | 4 | 2,496 | 10.1s | — |
-| Extract | gpt-5-mini | 8 | 4,309 | 31.4s | 4 Good |
-| Plan | gpt-4o-mini | 4 | 9,476 | 63.6s | — |
-| Plan | gpt-5-mini | 8 | 13,337 | 105.2s | 2 Good |
-| SQL | gpt-5-mini | 3 | 9,282 | 52.3s | 1 Bad |
+| Extract | gemini-3-flash | 4 | 2,813 | 4.9s | 3 Good, 1 Bad |
+| Extract | gemini-3.1-flash-lite | 4 | 2,236 | 3.3s | 3 Good |
+| Extract | gpt-5-mini | 5 | 4,787 | 63.3s | 4 Good |
+| Plan | claude-sonnet-4.6 | 1 | 12,164 | 36.1s | — |
+| Plan | deepseek-v3.2 | 1 | 15,106 | 112.8s | 1 Good |
+| Plan | gemini-3-flash | 5 | 8,998 | 15.7s | 2 Good |
+| Plan | gemini-3.1-flash-lite | 4 | 8,568 | 7.2s | 4 Good, 1 Partial |
+| Plan | gpt-5-mini | 2 | 13,663 | 123.5s | — |
+| Reconcile | gemini-3-flash | 1 | 1,484 | 3.1s | 1 Good |
+| Reconcile | gpt-4o-mini | 4 | 1,736 | 6.2s | — |
+| Reconcile | gpt-5.4 | 1 | 1,625 | 2.3s | — |
+| SQL | claude-sonnet-4.6 | 1 | 10,601 | 18.8s | — |
+| SQL | gemini-3-flash | 5 | 7,504 | 6.4s | 2 Good |
+| SQL | gemini-3.1-flash-lite | 1 | 7,772 | 4.5s | — |
+| SQL | gemini-3.1-pro | 1 | 18,543 | 102.4s | 1 Good |
+| SQL | devstral-2512 | 1 | 8,959 | 15.3s | 1 Good |
+| SQL | gpt-5-mini | 2 | 11,284 | 68.3s | — |
 
 ---
 
@@ -128,10 +140,10 @@ This decomposition enabled every subsequent optimization: prompt distillation, p
 │  DOCX/   │     │   these   │     │   do      │     │   the     │
 │  text)   │     │   rules"  │     │   this"   │     │   code"   │
 └──────────┘     │           │     │           │     │           │
-                 │ gpt-4o-   │     │ gpt-5-   │     │ gpt-5-   │
-                 │ mini      │     │ mini      │     │ mini      │
-                 │ ~10s      │     │ ~105s     │     │ ~52s      │
-                 │ 2.5K tok  │     │ 13.3K tok │     │ 9.3K tok  │
+                 │ gemini-3  │     │ gemini-3  │     │ gemini-3  │
+                 │ flash     │     │ flash     │     │ flash     │
+                 │ ~5s       │     │ ~16s      │     │ ~6s       │
+                 │ 2.8K tok  │     │ 9K tok    │     │ 7.5K tok  │
                  └─────┬─────┘     └─────┬─────┘     └─────┬─────┘
                        │                 │                  │
                  ┌─────▼─────┐     ┌─────▼─────┐     ┌─────▼─────┐
@@ -148,15 +160,17 @@ This decomposition enabled every subsequent optimization: prompt distillation, p
 
   Prompt Distillation — cost savings:
   ┌─────────────────────────────────────────────────────────────┐
-  │  Sonnet 4.6 (plan step):  90s, 14,920 tok, ~$0.12/run     │
-  │  gpt-5-mini (plan step): 105s, 13,337 tok, ~$0.01/run     │
+  │  Sonnet 4.6 (plan step):  36s, 12,164 tok, ~$0.12/run     │
+  │  gpt-5-mini (plan step): 124s, 13,663 tok, ~$0.01/run     │
+  │  gemini-3-flash (plan):   16s,  8,998 tok, ~$0.003/run    │
+  │  gemini-3.1-flash-lite:    7s,  8,568 tok, ~$0.001/run    │
   │                                                             │
   │  How: Run Sonnet once → extract 6 structural reasoning     │
   │  patterns (INSERT order, ID chaining, rule granularity,    │
   │  value derivation, natural keys, existence checks) →       │
-  │  encode as PLANNING GUIDANCE in gpt-5-mini's system prompt │
+  │  encode as PLANNING GUIDANCE in cheaper model's prompt     │
   │                                                             │
-  │  Result: ~12x cost reduction, same output quality,         │
+  │  Result: ~40–120x cost reduction, same output quality,     │
   │  no fine-tuning, no training data, instantly reversible    │
   └─────────────────────────────────────────────────────────────┘
 
@@ -232,7 +246,7 @@ This decomposition enabled every subsequent optimization: prompt distillation, p
 
 1. **Trust is earned, not declared.** You measure your way there.
 2. **The plan is the product.** It's the verification gate a compliance officer can read.
-3. **Prompt distillation > fine-tuning.** Same quality, 1/10th cost, instantly reversible.
+3. **Prompt distillation > fine-tuning.** Same quality, 40–120x cost reduction (Sonnet → gemini-flash), instantly reversible.
 4. **Playground mode is not optional.** AI-generated SQL must never touch production.
 5. **RAG is not always the answer.** For single-document extraction, full-text beats retrieval (97.3% retrieved = pure overhead).
 6. **The feedback loop closes the circle.** Ratings → comparison → thresholds → autonomy.
