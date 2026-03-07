@@ -26,6 +26,7 @@ Middleware:
 
 from __future__ import annotations
 
+import threading
 import traceback
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -96,11 +97,11 @@ def _sync_db_init():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _llm
-    import asyncio
 
-    # Fire-and-forget: DB init runs in background so uvicorn can serve
-    # HF's health probe immediately (prevents "stuck starting" loop).
-    asyncio.get_event_loop().run_in_executor(None, _sync_db_init)
+    # Daemon thread: DB init runs in background so uvicorn can serve
+    # HF's health probe immediately.  daemon=True ensures the thread
+    # dies instantly on SIGTERM — prevents shutdown hang → restart loop.
+    threading.Thread(target=_sync_db_init, daemon=True).start()
 
     logger.info("startup: initialising LLM provider")
     _llm = get_llm()
@@ -116,7 +117,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Apprentice — Fair Play Initiative API",
     description="FastAPI backend for Apprentice: verifiable agentic workflows. First domain: Fair Play Initiative (workforce attendance compliance).",
-    version="0.10.21",
+    version="0.10.22",
     lifespan=lifespan,
     redirect_slashes=False,
 )
