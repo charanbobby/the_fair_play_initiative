@@ -97,7 +97,9 @@ We built model selectors so supervisors can assign the right tool for each task.
 
 All of that is the application. And none of it is specific to attendance policies.
 
-When Peter starts in procurement, the pipeline is already there. The model selectors, the sandbox, the feedback ratings, the reconciliation, the cost tracking. Peter just needs new prompts and a new schema. Same for Roger in legal. Same for Theresa in healthcare.
+The sandbox isn't just for safety. It's a full working environment. You can seed it with sample data, reset it anytime, and run robust end-to-end tests before anything goes near production. That's part of the framework: every new apprentice gets a safe space to prove themselves first.
+
+When Peter starts in procurement, he doesn't need a new app. He needs new prompts and a new schema. The model selectors, the sandbox, the feedback ratings, the reconciliation, the cost tracking, it's all already there. Same for Roger in legal. Same for Theresa in healthcare.
 
 That's the **Apprentice framework**. It's not just Adam. It's the entire infrastructure for onboarding AI into any domain where someone reads a document and types data into a system. We built it once with Adam, and every apprentice after him inherits the tooling, the workflow, and the lessons learned.
 
