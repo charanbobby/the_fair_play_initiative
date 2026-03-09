@@ -1,106 +1,114 @@
 # APPRENTICE - Presentation Script
 
-> **Your part: ~6 minutes** (teammate covers the problem statement, then hands off to you)
 > **Style: Storytelling - meet Adam the Apprentice**
+> **Format: Recording - no time constraints, full detail**
 
 ---
 
-## HANDOFF LINE
+## OPENING - Problem + Meet Adam
 
-"Oh boy, it's been a long session today, so I'll keep this light. Let's do a little storytelling.
+"This is my capstone project for Building Agentic AI Applications. Let me tell you a story.
 
-What you're about to see is an apprentice. I'm calling him Adam. Adam works at the Fair Play Initiative, and this is what Adam looks like."
+Here's a problem every organization has. Someone in HR just got a 47-page attendance policy update. Their job is to read every page, figure out the rules, and type them into the system. If they misread a threshold, an employee gets written up who shouldn't have been. If the policy changes and nobody updates the system, the wrong rules run for months.
+
+That gap between what the document says and what the system does exists everywhere. HR, procurement, legal, healthcare. Someone reads a document and types it into a database. It's skilled, tedious work, and it's the bottleneck of every organization.
+
+So we built a framework to close that gap. We call it **Apprentice**. It's a supervised onboarding system for AI agents. You give it an agent, a domain, and a schema, and it provides the tooling to train, measure, and gradually trust that agent.
+
+Adam is our first agent. He works at the Fair Play Initiative, a workforce attendance compliance system, and this is what he looks like."
 
 **[Show the dashboard]**
 
 ---
 
-## ACT 1: MEET ADAM - LIVE DEMO (60 seconds)
+## ACT 1: LIVE DEMO
 
-"Remember the problem my teammate described? Someone reads a document, figures out what it means, types it into a system. That's the job we hired Adam for. Except Adam is AI.
-
-He's been here for three days. What you see on screen is the tooling we built to supervise him. We decide which models he uses, we see his past results, we rate his work."
+"Adam's been here three days. What you see on screen is the tooling we built to supervise him. We decide which models he uses, we see his past results, we rate his work."
 
 **[Upload a sample policy PDF]**
 
-"I've given Adam a policy PDF. Here's what he does:
+"I've given Adam a policy PDF. Watch what he does. He highlights keywords by category: organizations, regions, policy types, attendance rules. Checks if anything already exists in our database. Writes a plan in plain English with confidence scores. Then generates the SQL.
 
-First, he highlights keywords by category. Did he read the document correctly?
+Every step is available for us to rate: Good, Partial, or Bad. That feedback is how we measure whether Adam is getting better or worse over time.
 
-Next, he checks if anything already exists in our system. Matches instead of duplicating.
-
-Third, he writes a plan in plain English. Table by table, with confidence scores. This is where we approve what he's about to do.
-
-Finally, the SQL query. Every step is available for us to rate: Good, Partial, or Bad."
-
-**[TRANSITION]:** "Let's look at Adam's evolution."
+Let's look at how Adam got here."
 
 ---
 
-## ACT 2: DAY ONE - The Black Box (90 seconds)
+## ACT 2: DAY ONE - The Black Box
 
 **[Show Iteration 1 diagram]**
 
 "Day one. We gave Adam a document. He wrote something, but we couldn't validate it. Document in, SQL out. A black box.
 
-We asked him: what exactly are you doing? He said: 'I'm extracting keywords, planning, then writing SQL.' Great. Come back with each step separately so we can mark them Good, Partial, or Bad.
+We asked: what are you doing in there? He said: 'I'm extracting keywords, making a plan, writing SQL.' Great. Show us each step separately so we can check your work.
 
-That's **decomposition**. One opaque task broken into three transparent stages: Extract, Plan, SQL. Because when the output triggers someone's disciplinary action, you need to know exactly why.
+That's **decomposition**. One opaque task broken into three transparent stages. Because when the output triggers someone's disciplinary action, you need to know exactly why.
 
-But Adam's plans were confusing. GPT-5-mini, a cheaper model, produced plans that were hard to follow.
+But Adam's plans were confusing. He was running on GPT-5-mini and the output was hard to follow. So we swapped in Claude Sonnet 4.6 and ran the same task. The plans came back crystal clear.
 
-So we swapped in Claude Sonnet 4.6, one of the most capable models, and ran it multiple times. About 12 cents per run, way more expensive, but the plans were crystal clear.
+We studied those plans, found six reasoning patterns Claude was using, and wrote them into Adam's prompt. Now the cheap model follows that same playbook. Same quality, 40 to 120 times cheaper. That's **prompt distillation**. Study the strong model, write down what it does, teach it to the cheap one.
 
-We studied how Claude worked. How it ordered inserts, chained IDs, handled rule detail. Six reasoning patterns. We wrote those into Adam's system prompt. Now the cheap model follows Claude's playbook. Same quality, 40 to 120 times cheaper. That's **prompt distillation**."
+We also tried something called RAG, Retrieval-Augmented Generation. The idea is: instead of giving Adam the whole document, you chop it into pieces, turn each piece into numbers that capture its meaning, that's called an embedding, and let Adam search for just the relevant parts. Like a librarian who finds pages by meaning, not by keyword.
 
-**[TRANSITION]:** "After day one, Adam could show his work. But he had no memory of what was already in the system."
+So we showed Adam this machine. He fed the policy in, it made 26 chunks, and when he searched... it returned 20 of the 26. 97.3% of the document. Took twice as long, used 80% more tokens.
+
+Adam's job is exhaustive extraction. He needs every rule, every threshold, every escalation level. He doesn't need a search engine, he needs the whole document. The machine was looking for needles, but Adam needs the whole haystack. So we sent it back."
+
+**[TRANSITION]:** "After day one, Adam could show his work, and we knew which tools helped and which didn't. But he had no memory of what was already in the system."
 
 ---
 
-## ACT 3: DAY TWO - Discovery Day (90 seconds)
+## ACT 3: DAY TWO - Discovery Day
 
 **[Show Iteration 2 diagram]**
 
-"Day two was all discovery.
+"Day two was all about giving Adam awareness.
 
-First: Adam can't read names clearly. 'Acme Manufacturing' versus 'ACMI Manufacturing Co'? He creates two separate organizations. Same policy twice? Duplicates everything. For production, that silently corrupts your database.
+Adam can't read names consistently. 'Acme Manufacturing' versus 'ACMI Manufacturing Co'? To him, those are two separate organizations. Upload the same policy twice? He duplicates everything. In production, that silently corrupts your database.
 
-So we did reconciliation training. Showed him the real data, gave him examples: if names are close, they're probably the same. Now Adam checks the database first, matches existing records, and flags conflicts.
+So we trained him on reconciliation. Now Adam checks the database first, matches against existing records, and flags conflicts like overlapping dates or duplicate policies. The human reviews what he flagged before anything gets written.
 
-Second: tools. Adam was locked to GPT-5-mini. We took him to a room full of tools, gave him model selectors and a sandbox to test queries safely. We kept swapping models and rating results. What took 3 to 5 minutes came down to 31 seconds. Gemini 3 Flash: a few cents for the complete pipeline.
+Second: tools. Adam was locked to GPT-5-mini. We gave him model selectors, a different model for each step. And a sandbox to test queries safely. We kept swapping models, rating results. 3 to 5 minutes came down to 31 seconds. Gemini 3 Flash, a few cents for the whole pipeline.
 
-We also moved observability in-house. On day one we used Arize AX, an external tool. But if you're supervising someone, you need the metrics right where you're working. So we built cost, latency, and feedback ratings directly into the UI."
+We also moved observability in-house. Token counts, costs, latency, all visible in the UI where the supervisor works. If you're supervising someone, you need the metrics right where you're looking."
 
-**[TRANSITION]:** "By day two, Adam was smart, fast, and cheap. Day three: scaling up."
+**[TRANSITION]:** "By day two, Adam was smart, fast, and cheap. Day three was about making sure he stays honest."
 
 ---
 
-## ACT 4: DAY THREE - Adam Stops Repeating Himself (45 seconds)
+## ACT 4: DAY THREE - Hardening
 
 **[Show Iteration 3 diagram]**
 
-"Day three. We noticed Adam re-reads his entire training manual before every single task. Same schema, same guidance, same examples. Like an employee re-reading the company handbook every morning.
+"Day three. Two problems.
 
-So we enabled **prompt caching**. Now Adam remembers the parts that don't change. First read is full price, every time after that is from memory. The more he works, the cheaper he gets. And that matters if we want him handling policies at volume."
+First: Adam re-reads his entire training manual before every task. Same schema, same guidance, every time. Like re-reading the company handbook every morning. So we enabled **prompt caching**. The parts that don't change, Adam remembers between runs. The more he works, the cheaper he gets.
+
+Second: we caught Adam making mistakes that looked like correct work.
+
+He was misclassifying things. FMLA showed up as a 'region' in his extraction. FMLA isn't a place, it's a federal law. If that flows downstream, you get a region called 'FMLA' next to 'Ohio' in your database. Perfectly formatted. Completely wrong.
+
+He was over-extracting. Turning glossary definitions and HR procedures into rules. A policy should give 20 to 25 rules. Adam was giving us 50.
+
+And the worst one: when something was missing from the document, Adam made it up. No effective date? He'd invent one. A realistic date that enters your database as if it came from the source. That's hallucination at its most dangerous, because it looks correct.
+
+So we hardened his prompts. Entity-type boundaries so laws stay in the law field and regions stay in the region field. Exclusion categories so definitions and procedures don't become rules. And absence handling: when data is missing, Adam says NOT FOUND instead of guessing.
+
+That's **prompt hardening**. You don't just tell the AI what to do. You tell it what not to do, and what to do when there's nothing to do."
 
 ---
 
-## ACT 5: ADAM'S FUTURE - Closing (90 seconds)
+## ACT 5: CLOSING
 
-"Adam's been here three days. He needs about another week before we start reducing supervision.
+"Adam's been here three days. He needs about another week before we reduce supervision.
 
-But Adam isn't the only apprentice. There's Peter, starting in procurement in a couple of weeks, extracting terms from vendor contracts and RFPs. Roger in legal, reading compliance documents and extracting requirements. Theresa in healthcare, looking at patient forms and referrals.
+But Adam isn't the only agent we can onboard. Picture Peter in procurement, extracting terms from vendor contracts. Roger in legal, reading compliance documents. Theresa in healthcare, reviewing patient forms. Each one onboarded into a specific domain.
 
-And here's the thing: they don't have to start from scratch. Look at what we've already built while onboarding Adam.
+They don't start from scratch. Look at what we built with Adam: model selectors, a sandbox for safe testing, a feedback system that tracks performance, a reconciliation layer, in-UI observability, and prompt hardening patterns that transfer to any domain.
 
-We built model selectors so supervisors can assign the right tool for each task. We built a sandbox where AI can execute queries without ever touching production data. We built a feedback system where humans rate every step, and those ratings accumulate into model performance stats. We built a reconciliation layer so the AI checks what already exists before writing anything new. We built observability directly into the UI so you never have to leave the app to supervise.
+None of that is specific to attendance policies. When Peter starts in procurement, he gets new prompts and a new schema. Everything else is already there.
 
-All of that is the application. And none of it is specific to attendance policies.
-
-The sandbox isn't just for safety. It's a full working environment. You can seed it with sample data, reset it anytime, and run robust end-to-end tests before anything goes near production. That's part of the framework: every new apprentice gets a safe space to prove themselves first.
-
-When Peter starts in procurement, he doesn't need a new app. He needs new prompts and a new schema. The model selectors, the sandbox, the feedback ratings, the reconciliation, the cost tracking, it's all already there. Same for Roger in legal. Same for Theresa in healthcare.
-
-That's the **Apprentice framework**. It's not just Adam. It's the entire infrastructure for onboarding AI into any domain where someone reads a document and types data into a system. We built it once with Adam, and every apprentice after him inherits the tooling, the workflow, and the lessons learned.
+That's the **Apprentice framework**. It closes the gap between what the policy says and what the system does. Wherever documents become decisions, that gap is the problem. We built the system that closes it.
 
 Thank you."
